@@ -1,3 +1,10 @@
+import {
+  growthFor,
+  GROWTH_RULESET,
+  WORLD_TERRITORIES,
+  RACES,
+  type RealmChallenge,
+} from '../shared/expansion';
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
@@ -70,13 +77,18 @@ export class World extends EventEmitter {
     this.db.exec('PRAGMA journal_mode=WAL; PRAGMA busy_timeout=3000;');
     this.db.exec(readFileSync(new URL('./schema.sql', import.meta.url), 'utf8'));
     const env = this.get('SELECT * FROM environment WHERE id=1');
-    if (env && (env.mode !== mode || env.version !== 1)) {
+    if (env && (env.mode !== mode || ![1, 2].includes(env.version))) {
       this.db.close();
       throw new Error('Database environment or schema mismatch');
     }
     if (!env) this.run('INSERT INTO environment VALUES (1,?,?,1)', mode, randomUUID());
     this.clockOffset = Number(this.setting('clockOffset') ?? 0);
     if (!this.get('SELECT id FROM kingdoms LIMIT 1')) this.initialize();
+    this.atomic(() => {
+      this.syncGrowth();
+      this.ensureChallenges();
+      this.run('UPDATE environment SET version=2 WHERE id=1');
+    });
   }
   now() {
     return this.clock() + this.clockOffset;
@@ -388,6 +400,8 @@ export class World extends EventEmitter {
           tone: 'heroic',
         });
         this.populate(scenario);
+        this.syncGrowth();
+        this.ensureChallenges();
       });
     } finally {
       this.db.exec('PRAGMA foreign_keys=ON');
@@ -534,6 +548,7 @@ export class World extends EventEmitter {
           kingdom,
         );
       }
+      this.syncGrowth();
       return c.id;
     }
     const id = randomUUID();
@@ -564,6 +579,8 @@ export class World extends EventEmitter {
       kingdom,
       this.mode === 'live' ? 'twitch' : 'simulated',
     );
+    this.syncGrowth();
+    this.recordChallenge('join', id, 'new');
     return id;
   }
   command(actor: { subject: string; name: string }, cmd: Command, key: string): CommandResult {
@@ -618,13 +635,14 @@ export class World extends EventEmitter {
               throw new RuleError('No chapter is accepting pledges.');
             if (c.kingdom !== ch.attacker && c.kingdom !== ch.defender)
               throw new RuleError('Your kingdom is not part of this chapter.');
-            this.run(
+            const inserted = this.run(
               'INSERT OR IGNORE INTO participants VALUES (?,?,?,?)',
               ch.id,
               id,
               c.kingdom,
               this.now(),
             );
+            if (inserted.changes) this.recordChallenge('pledge', id, 'pledge');
             message = 'Your pledge is recorded. Choose !vote attack, defend or raid.';
             break;
           }
@@ -695,6 +713,7 @@ export class World extends EventEmitter {
                 `${c.name} upgraded ${gear.name} to +${gear.upgrade + 1}.`,
                 c.kingdom,
               );
+              this.recordChallenge('upgrade', id, gear.slot);
             }
             break;
           }
@@ -778,7 +797,7 @@ export class World extends EventEmitter {
       if (!Object.hasOwn(FACTIONS, attacker)) throw new RuleError('Unknown attacker.');
       if (this.get("SELECT 1 FROM chapters WHERE status IN('open','paused')"))
         throw new RuleError('Finish the current chapter first.');
-      const t = TERRITORIES.find((t) => t.id === target),
+      const t = WORLD_TERRITORIES.find((t) => t.id === target),
         owner = this.get('SELECT * FROM territories WHERE id=?', target);
       if (!t || !owner || t.capital || owner.owner === attacker)
         throw new RuleError('Choose an enemy-held border territory.');
@@ -910,6 +929,17 @@ export class World extends EventEmitter {
           roster,
           pledged: pledged.length,
           effective: effectivePower(roster),
+          population:
+            this.get('SELECT high_water FROM kingdom_growth WHERE kingdom=?', kingdom)
+              ?.high_water ?? 0,
+          healthBonusBp: growthFor(
+            this.get('SELECT high_water FROM kingdom_growth WHERE kingdom=?', kingdom)
+              ?.high_water ?? 0,
+          ).healthBonusBp,
+          maxHealth: growthFor(
+            this.get('SELECT high_water FROM kingdom_growth WHERE kingdom=?', kingdom)
+              ?.high_water ?? 0,
+          ).fortressHealth,
         };
       });
       if (sides.some((s) => !s.roster.length)) {
@@ -923,7 +953,7 @@ export class World extends EventEmitter {
       }
       const input: BattleInput = {
         seed: ch.seed,
-        ruleset: RULESET,
+        ruleset: GROWTH_RULESET,
         attacker: ch.attacker,
         defender: ch.defender,
         territory: ch.territory,
@@ -978,7 +1008,7 @@ export class World extends EventEmitter {
       const title = result.winner
         ? `${FACTIONS[result.winner].name} prevails`
         : 'An honorable draw';
-      const territory = TERRITORIES.find((t) => t.id === ch.territory)!.name;
+      const territory = WORLD_TERRITORIES.find((t) => t.id === ch.territory)!.name;
       const body = result.winner
         ? `${FACTIONS[result.winner].name} prevailed at ${territory} with ${sides.find((s) => s.kingdom === result.winner)!.tactic}. ${result.winner === ch.attacker ? 'The territory has a new banner.' : 'The defending banner holds.'}`
         : `The armies drew at ${territory}. Its banner remains unchanged.`;
@@ -999,13 +1029,14 @@ export class World extends EventEmitter {
         );
         for (let i = 0; i < chars.length; i++) {
           const id = chars[i].id;
-          this.run(
+          const inserted = this.run(
             'INSERT OR IGNORE INTO participants VALUES (?,?,?,?)',
             ch.id,
             id,
             faction,
             this.now(),
           );
+          if (inserted.changes) this.recordChallenge('pledge', id, 'pledge');
           this.run(
             'INSERT INTO votes VALUES (?,?,?,?) ON CONFLICT(chapter_id,character_id) DO NOTHING',
             ch.id,
@@ -1179,6 +1210,8 @@ export class World extends EventEmitter {
     });
   }
   tick() {
+    if ((this.get('SELECT MAX(expires_at) n FROM challenges')?.n ?? Infinity) <= this.now())
+      this.atomic(() => this.ensureChallenges());
     const activeSeason = this.get("SELECT * FROM seasons WHERE status='active'")!;
     if (this.now() >= activeSeason.ends_at) this.rollSeason();
     for (const ch of this.all(
@@ -1206,9 +1239,10 @@ export class World extends EventEmitter {
       this.atomic(() => {
         this.set('lastAutoChapter', this.now());
         for (const f of Object.keys(FACTIONS) as Faction[]) {
-          const target = TERRITORIES.find(
+          const target = WORLD_TERRITORIES.find(
             (t) =>
               !t.capital &&
+              !!this.get('SELECT 1 FROM territories WHERE id=?', t.id) &&
               this.get('SELECT owner,last_session FROM territories WHERE id=?', t.id)?.owner !==
                 f &&
               this.get('SELECT last_session FROM territories WHERE id=?', t.id)?.last_session !==
@@ -1277,7 +1311,7 @@ export class World extends EventEmitter {
       );
       this.run('UPDATE kingdoms SET points=0,wins=0');
       this.run('UPDATE characters SET contribution=0,wins=0');
-      for (const t of TERRITORIES)
+      for (const t of WORLD_TERRITORIES)
         this.run('UPDATE territories SET owner=?,last_session=NULL WHERE id=?', t.owner, t.id);
       this.run(
         'INSERT INTO seasons VALUES (?,?,?,?,?)',
@@ -1294,6 +1328,135 @@ export class World extends EventEmitter {
       );
     });
   }
+  syncGrowth() {
+    for (const kingdom of Object.keys(FACTIONS) as Faction[]) {
+      const count = this.get('SELECT COUNT(*) n FROM characters WHERE kingdom=?', kingdom)!.n;
+      this.run(
+        'INSERT INTO kingdom_growth VALUES (?,?) ON CONFLICT(kingdom) DO UPDATE SET high_water=MAX(high_water,excluded.high_water)',
+        kingdom,
+        count,
+      );
+      const peak = this.get(
+        'SELECT high_water FROM kingdom_growth WHERE kingdom=?',
+        kingdom,
+      )!.high_water;
+      for (const t of WORLD_TERRITORIES.filter(
+        (t) => t.home === kingdom && t.unlockAt && peak >= t.unlockAt,
+      )) {
+        if (
+          this.run('INSERT OR IGNORE INTO territories(id,owner) VALUES (?,?)', t.id, kingdom)
+            .changes
+        )
+          this.event(
+            'expansion',
+            t.name + ' discovered',
+            FACTIONS[kingdom].name +
+              ' has opened a new frontier. Community growth strengthens its fortress.',
+            kingdom,
+          );
+      }
+    }
+  }
+  ensureChallenges() {
+    if ((this.get('SELECT MAX(expires_at) n FROM challenges')?.n ?? 0) > this.now()) return;
+    this.run(
+      "UPDATE challenges SET status='expired' WHERE status='open' AND expires_at<=?",
+      this.now(),
+    );
+    for (const race of RACES)
+      this.run(
+        'INSERT INTO challenges(id,template,opened_at,expires_at) VALUES (?,?,?,?)',
+        randomUUID(),
+        race.id,
+        this.now(),
+        this.now() + 86400000,
+      );
+  }
+  recordChallenge(metric: string, characterId: string, milestone: string) {
+    const character = this.character(characterId, false);
+    for (const race of RACES.filter((r) => r.metric === metric)) {
+      for (const row of this.all(
+        "SELECT * FROM challenges WHERE template=? AND status='open' AND expires_at>?",
+        race.id,
+        this.now(),
+      )) {
+        const entity = race.scope === 'kingdom' ? character.kingdom : characterId;
+        const inserted = this.run(
+          'INSERT OR IGNORE INTO challenge_contributions VALUES (?,?,?,?)',
+          row.id,
+          characterId,
+          milestone,
+          character.kingdom,
+        );
+        if (!inserted.changes) continue;
+        this.run(
+          'INSERT INTO challenge_progress VALUES (?,?,1) ON CONFLICT(challenge_id,entity_id) DO UPDATE SET score=score+1',
+          row.id,
+          entity,
+        );
+        if (
+          this.get(
+            'SELECT score FROM challenge_progress WHERE challenge_id=? AND entity_id=?',
+            row.id,
+            entity,
+          )!.score < race.target
+        )
+          continue;
+        if (
+          !this.run(
+            "UPDATE challenges SET status='completed',winner_id=?,completed_at=? WHERE id=? AND status='open'",
+            entity,
+            this.now(),
+            row.id,
+          ).changes
+        )
+          continue;
+        const recipients =
+          race.scope === 'citizen'
+            ? [{ character_id: characterId }]
+            : this.all(
+                'SELECT DISTINCT character_id FROM challenge_contributions WHERE challenge_id=? AND kingdom=?',
+                row.id,
+                character.kingdom,
+              );
+        for (const recipient of recipients)
+          this.reward(recipient.character_id, row.id, 'challenge', race.xp, race.gold);
+        this.event(
+          'challenge',
+          race.title + ' won',
+          (race.scope === 'kingdom' ? FACTIONS[character.kingdom].name : character.name) +
+            ' claimed first place. Contributor rewards have been recorded.',
+          character.kingdom,
+        );
+      }
+    }
+  }
+  challengeSnapshots(): RealmChallenge[] {
+    const name = (id: string) =>
+      Object.hasOwn(FACTIONS, id)
+        ? FACTIONS[id as Faction].name
+        : (this.get(
+            'SELECT u.name FROM users u JOIN characters c ON c.user_id=u.id WHERE c.id=?',
+            id,
+          )?.name ?? 'Unknown citizen');
+    return this.all('SELECT * FROM challenges ORDER BY opened_at DESC,template LIMIT 12').map(
+      (row) => {
+        const race = RACES.find((r) => r.id === row.template)!;
+        return {
+          ...race,
+          id: row.id,
+          status: row.status === 'open' && this.now() >= row.expires_at ? 'expired' : row.status,
+          winner: row.winner_id ? name(row.winner_id) : null,
+          openedAt: row.opened_at,
+          expiresAt: row.expires_at,
+          leaders: this.all(
+            'SELECT entity_id,score FROM challenge_progress WHERE challenge_id=? ORDER BY score DESC,entity_id LIMIT 5',
+            row.id,
+          ).map((p) => ({ id: p.entity_id, name: name(p.entity_id), score: p.score })),
+        };
+      },
+    );
+  }
   snapshot(persona?: string): WorldSnapshot {
     const env = this.get('SELECT * FROM environment WHERE id=1')!,
       season = this.get("SELECT * FROM seasons WHERE status='active'")!;
@@ -1301,11 +1464,15 @@ export class World extends EventEmitter {
       this.get(
         "SELECT id FROM chapters WHERE status IN('open','paused') ORDER BY created_at DESC LIMIT 1",
       ) ?? this.get('SELECT id FROM chapters ORDER BY created_at DESC LIMIT 1');
-    const territories = TERRITORIES.map((t) => {
+    const territories = WORLD_TERRITORIES.filter((t) =>
+      this.get('SELECT 1 FROM territories WHERE id=?', t.id),
+    ).map((t) => {
       const row = this.get('SELECT owner,last_session FROM territories WHERE id=?', t.id)!;
       return { ...t, owner: row.owner, contestedToday: row.last_session === this.day() };
     });
     return {
+      worldVersion: 2,
+      challenges: this.challengeSnapshots(),
       mode: this.mode,
       generation: env.generation,
       revision: this.get('SELECT COALESCE(MAX(id),0) n FROM events')!.n,
@@ -1326,6 +1493,9 @@ export class World extends EventEmitter {
         return {
           id,
           ...FACTIONS[id],
+          ...growthFor(
+            this.get('SELECT high_water FROM kingdom_growth WHERE kingdom=?', id)?.high_water ?? 0,
+          ),
           citizens: this.get('SELECT COUNT(*) n FROM characters WHERE kingdom=?', id)!.n,
           territories: territories.filter((t) => t.owner === id).length,
           lord: lord?.name ?? null,

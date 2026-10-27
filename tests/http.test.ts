@@ -31,6 +31,55 @@ async function setup() {
     },
   };
 }
+
+test('simulated arrivals are authenticated, bounded, idempotent, and unavailable in Live', async () => {
+  const f = await setup();
+  try {
+    const payload = { kingdom: 'north', count: 25, key: '52d397ae-5613-4b7e-9949-74f7b7501095' };
+    assert.equal(
+      (await f.app.inject({ method: 'POST', url: '/api/simulation/welcome', payload })).statusCode,
+      401,
+    );
+    for (let i = 0; i < 2; i++)
+      assert.equal(
+        (
+          await f.app.inject({
+            method: 'POST',
+            url: '/api/simulation/welcome',
+            payload,
+            headers: f.headers,
+          })
+        ).statusCode,
+        200,
+      );
+    assert.equal(f.worlds.simulation.snapshot().citizens, 625);
+    assert.equal(f.worlds.live.snapshot().citizens, 0);
+    assert.equal(
+      (
+        await f.app.inject({
+          method: 'POST',
+          url: '/api/live/welcome',
+          payload,
+          headers: f.headers,
+        })
+      ).statusCode,
+      404,
+    );
+    assert.equal(
+      (
+        await f.app.inject({
+          method: 'POST',
+          url: '/api/simulation/welcome',
+          payload: { ...payload, count: 1000 },
+          headers: f.headers,
+        })
+      ).statusCode,
+      400,
+    );
+  } finally {
+    await f.close();
+  }
+});
 test('dashboard authentication, CSRF, origin checks and bounded request schemas', async () => {
   const f = await setup();
   try {

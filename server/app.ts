@@ -141,25 +141,21 @@ export async function createApp(
   });
   app.setErrorHandler((error, req, reply) => {
     if (error instanceof z.ZodError)
-      return reply
-        .code(400)
-        .send({
-          code: 'INVALID_INPUT',
-          message: error.issues.map((i) => i.message).join('; '),
-          requestId: req.id,
-        });
+      return reply.code(400).send({
+        code: 'INVALID_INPUT',
+        message: error.issues.map((i) => i.message).join('; '),
+        requestId: req.id,
+      });
     if (error instanceof RuleError)
       return reply
         .code(error.status)
         .send({ code: error.code, message: error.message, requestId: req.id });
     console.error(`[${req.id}]`, error instanceof Error ? error.message : 'Unexpected failure');
-    return reply
-      .code(500)
-      .send({
-        code: 'INTERNAL_ERROR',
-        message: 'The operation failed. No partial game state was saved.',
-        requestId: req.id,
-      });
+    return reply.code(500).send({
+      code: 'INTERNAL_ERROR',
+      message: 'The operation failed. No partial game state was saved.',
+      requestId: req.id,
+    });
   });
   const worldFor = (req: any) => worlds[z.enum(['simulation', 'live']).parse(req.params.mode)];
   app.get('/api/health', async () => ({
@@ -354,6 +350,29 @@ export async function createApp(
       .strict()
       .parse(req.body);
     worlds.simulation.advance(seconds);
+    return { ok: true };
+  });
+  app.post('/api/simulation/welcome', async (req) => {
+    const body = z
+      .object({
+        kingdom: z.enum(['north', 'east', 'west']),
+        count: z.number().int().min(1).max(50),
+        key: z.string().uuid(),
+      })
+      .strict()
+      .parse(req.body);
+    const world = worlds.simulation;
+    world.atomic(() => {
+      for (let i = 0; i < body.count; i++)
+        world.command(
+          {
+            subject: `sim:arrival:${body.key}:${i}`,
+            name: `Wayfarer ${body.key.slice(0, 4)}-${i + 1}`,
+          },
+          { type: 'join', argument: body.kingdom },
+          `arrival:${body.key}:${i}`,
+        );
+    });
     return { ok: true };
   });
   app.post('/api/simulation/populate-chapter', async () => {

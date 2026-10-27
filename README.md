@@ -1,5 +1,7 @@
 # ChatVerse
 
+The living atlas now reveals new outposts as kingdoms grow, with capped fortress health and daily first-completion community challenges. See [world expansion and race rules](docs/WORLD_EXPANSION.md). Restart the local server after updating to apply the additive migration.
+
 **Your stream. Their kingdom.** A local-first Twitch community campaign: citizens join factions, develop persistent characters, choose battle tactics, elect Lords and write a shared chronicle while the streamer plays their normal game.
 
 This repository now contains a working frontend, backend, game engine and populated Simulation. Real Twitch OAuth/EventSub code is included; a real-channel authorization test still requires the owner's credentials. See [build status](docs/BUILD_STATUS.md) for the precise verified scope and remaining work.

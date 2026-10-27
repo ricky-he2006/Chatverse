@@ -627,7 +627,10 @@ function PageHeader({ ctx, screen }: { ctx: Context; screen: Screen }) {
       'Your kingdom is alive.',
       'Every citizen has a story. Every stream writes a new chapter.',
     ],
-    world: ['A world worth fighting for.', 'Seven territories. Three banners. One shared history.'],
+    world: [
+      'A world worth fighting for.',
+      'Three banners. New horizons. A realm that grows with its people.',
+    ],
     kingdoms: [
       'Three banners. One realm.',
       'Find your people, raise your crest, and shape the council.',
@@ -832,7 +835,8 @@ function Overview({ ctx }: { ctx: Context }) {
           </div>
           <div className="map-summary">
             <span>
-              <Flag size={14} />7 territories to call home
+              <Flag size={14} />
+              {ctx.s.territories.length} territories to call home
             </span>
             <span>
               <ShieldCheck size={14} />3 protected capitals
@@ -1099,6 +1103,14 @@ function ChapterCard({ ctx }: { ctx: Context }) {
 }
 function ScoreBar({ chapter }: { chapter: Chapter }) {
   const r = chapter.result!;
+  if (r.maxHealthA && r.maxHealthB)
+    return (
+      <div className="fortress-bars">
+        <FortressMeter faction={chapter.attacker} health={r.healthA!} max={r.maxHealthA} />
+        <FortressMeter faction={chapter.defender} health={r.healthB!} max={r.maxHealthB} />
+        <small>FORTRESS HEALTH · HIGHEST REMAINING PERCENTAGE WINS</small>
+      </div>
+    );
   return (
     <div className="battle-score">
       <div className="score-numbers">
@@ -1115,6 +1127,30 @@ function ScoreBar({ chapter }: { chapter: Chapter }) {
         <div style={{ flex: 1, background: FACTIONS[chapter.defender].color }} />
       </div>
       <div className="score-label">CAMPAIGN SCORE · THREE SEEDED ROUNDS</div>
+    </div>
+  );
+}
+function FortressMeter({
+  faction,
+  health,
+  max,
+}: {
+  faction: Faction;
+  health: number;
+  max: number;
+}) {
+  return (
+    <div
+      className="fortress-meter"
+      style={{ '--settlement': FACTIONS[faction].color } as CSSProperties}
+    >
+      <span>
+        {Math.round((health / max) * 100)}% fortress HP{' '}
+        <b>
+          {num(health)} / {num(max)}
+        </b>
+      </span>
+      <progress max={max} value={health} aria-label={FACTIONS[faction].name + ' fortress health'} />
     </div>
   );
 }
@@ -1209,7 +1245,10 @@ function WorldScreen({ ctx }: { ctx: Context }) {
     setSelected = ctx.setTerritory;
   const [list, setList] = useState(false),
     [zoom, setZoom] = useState(1);
-  const t = ctx.s.territories.find((t) => t.id === selected)!,
+  const t =
+      ctx.s.territories.find((t) => t.id === selected) ??
+      ctx.s.territories.find((t) => t.id === 'crossroads') ??
+      ctx.s.territories[0],
     k = ctx.s.kingdoms.find((k) => k.id === t.owner)!;
   return (
     <div className="world-screen-grid">
@@ -1269,6 +1308,108 @@ function WorldScreen({ ctx }: { ctx: Context }) {
           ))}
         </div>
       </Panel>
+      <div className="world-growth-strip">
+        <div>
+          <span className="eyebrow">THE REALM GROWS WITH YOU</span>
+          <h2>More citizens. New horizons.</h2>
+          <p>
+            At 25, 100, 250 and 500 citizens, each kingdom reveals a new outpost and earns +5%
+            fortress health. Maximum +20%. Unlocked land stays discovered.
+          </p>
+        </div>
+        {ctx.s.kingdoms.map((k) => (
+          <div
+            className="growth-kingdom"
+            key={k.id}
+            style={{ '--settlement': k.color } as CSSProperties}
+          >
+            <Crest faction={k.id} size={30} />
+            <strong>{k.name}</strong>
+            <span>
+              {k.citizens} citizens · {k.growthLevel ?? 0}/4 outposts
+            </span>
+            <b>
+              {num(k.fortressHealth ?? 1800)} fortress HP{' '}
+              <small>+{(k.healthBonusBp ?? 0) / 100}%</small>
+            </b>
+            <progress
+              aria-label={k.name + ' population toward next frontier'}
+              max={k.nextExpansionAt ?? 500}
+              value={Math.min(k.populationPeak ?? k.citizens, k.nextExpansionAt ?? 500)}
+            />
+            <small>
+              {k.nextExpansionAt
+                ? k.nextExpansionAt + ' citizens unlock the next frontier'
+                : 'All frontiers discovered'}
+            </small>
+            {ctx.s.mode === 'simulation' && ctx.s.worldVersion === 2 && (
+              <Button
+                disabled={ctx.busy}
+                onClick={() =>
+                  ctx.run(
+                    () =>
+                      ctx.action('welcome', { kingdom: k.id, count: 25, key: crypto.randomUUID() }),
+                    '25 simulated newcomers arrived.',
+                  )
+                }
+              >
+                <Users size={13} /> Welcome 25 simulated citizens
+              </Button>
+            )}
+          </div>
+        ))}
+      </div>
+      <div className="realm-challenges">
+        <div className="challenge-heading">
+          <span className="eyebrow">REALM-WIDE RACES</span>
+          <h2>Make history together.</h2>
+          <p>
+            Shared across this channel realm. First to the finish claims the trophy. Only new
+            actions count; rewards respect daily limits.
+          </p>
+        </div>
+        {(ctx.s.challenges ?? []).map((r) => (
+          <Panel key={r.id} className={'race-card ' + r.status}>
+            <span className="eyebrow">
+              {r.scope === 'kingdom' ? 'KINGDOM RACE' : 'CITIZEN RACE'} · {r.status}
+            </span>
+            <h3>{r.title}</h3>
+            <p>{r.description}</p>
+            {r.winner ? (
+              <strong className="race-winner">♛ {r.winner}</strong>
+            ) : (
+              <small>
+                {r.status === 'expired'
+                  ? 'Race closed without a winner'
+                  : Math.max(0, Math.ceil((r.expiresAt - ctx.s.now) / 3600000)) +
+                    ' hours remaining'}
+              </small>
+            )}
+            {(r.leaders.length
+              ? r.leaders
+              : [{ id: 'empty', name: 'The first chapter is yours', score: 0 }]
+            ).map((l) => (
+              <div className="race-leader" key={l.id}>
+                <span>
+                  {l.name}
+                  <b>
+                    {l.score}/{r.target}
+                  </b>
+                </span>
+                <progress max={r.target} value={l.score} aria-label={r.title + ': ' + l.name} />
+              </div>
+            ))}
+            <footer>
+              Up to {r.xp} XP + {r.gold} gold{' '}
+              {r.scope === 'kingdom' ? 'per winning contributor' : 'for the champion'}
+              <small>Permanent first-place record · 24-hour race</small>
+            </footer>
+          </Panel>
+        ))}
+        {!ctx.s.worldVersion && (
+          <p>Restart ChatVerse to enable persistent growth and realm challenges.</p>
+        )}
+      </div>
       <div className="world-inspector">
         <Panel>
           <span className="eyebrow">TERRITORY INSPECTOR</span>
@@ -1299,17 +1440,21 @@ function WorldScreen({ ctx }: { ctx: Context }) {
             </div>
             <div>
               <dt>Connected regions</dt>
-              <dd>{t.neighbors.length}</dd>
+              <dd>
+                {t.neighbors.filter((id) => ctx.s.territories.some((t) => t.id === id)).length}
+              </dd>
             </div>
           </dl>
           <span className="eyebrow">NEIGHBORING TERRITORIES</span>
           <div className="neighbor-list">
-            {t.neighbors.map((id) => (
-              <button key={id} onClick={() => setSelected(id)}>
-                {ctx.s.territories.find((t) => t.id === id)!.name}
-                <ArrowUpRight size={12} />
-              </button>
-            ))}
+            {t.neighbors
+              .filter((id) => ctx.s.territories.some((t) => t.id === id))
+              .map((id) => (
+                <button key={id} onClick={() => setSelected(id)}>
+                  {ctx.s.territories.find((t) => t.id === id)!.name}
+                  <ArrowUpRight size={12} />
+                </button>
+              ))}
           </div>
           {!t.capital && (
             <Button
@@ -2111,6 +2256,16 @@ function BattlesScreen({ ctx }: { ctx: Context }) {
                   <span className="eyebrow">THE CHALLENGER</span>
                   <h2>{FACTIONS[ch.attacker].name}</h2>
                   <span>{ch.pledged[ch.attacker]} pledged citizens</span>
+                  {ch.result?.maxHealthA && (
+                    <FortressMeter
+                      faction={ch.attacker}
+                      max={ch.result.maxHealthA}
+                      health={
+                        ch.result.maxHealthA -
+                        ch.result.rounds.slice(0, round).reduce((s, r) => s + r.scoreB, 0)
+                      }
+                    />
+                  )}
                   {ch.result && (
                     <strong className="arena-score">
                       {num(ch.result.rounds.slice(0, round).reduce((s, r) => s + r.scoreA, 0))}
@@ -2129,6 +2284,16 @@ function BattlesScreen({ ctx }: { ctx: Context }) {
                   <span className="eyebrow">THE DEFENDER</span>
                   <h2>{FACTIONS[ch.defender].name}</h2>
                   <span>{ch.pledged[ch.defender]} pledged citizens</span>
+                  {ch.result?.maxHealthB && (
+                    <FortressMeter
+                      faction={ch.defender}
+                      max={ch.result.maxHealthB}
+                      health={
+                        ch.result.maxHealthB -
+                        ch.result.rounds.slice(0, round).reduce((s, r) => s + r.scoreA, 0)
+                      }
+                    />
+                  )}
                   {ch.result && (
                     <strong className="arena-score">
                       {num(ch.result.rounds.slice(0, round).reduce((s, r) => s + r.scoreB, 0))}
@@ -2312,6 +2477,13 @@ function BattlesScreen({ ctx }: { ctx: Context }) {
               </>
             ) : ch?.input ? (
               <div className="tactic-results">
+                {ch.result?.maxHealthA && (
+                  <p className="fortress-result">
+                    Fortress health remaining: {ch.result.healthA}/{ch.result.maxHealthA} vs{' '}
+                    {ch.result.healthB}/{ch.result.maxHealthB}. The highest remaining percentage
+                    wins.
+                  </p>
+                )}
                 {ch.input.sides.map((side) => (
                   <div key={side.kingdom}>
                     <Crest faction={side.kingdom} size={31} />
@@ -2402,8 +2574,8 @@ function BattlesScreen({ ctx }: { ctx: Context }) {
                       <th>Round</th>
                       <th>Attacker roll</th>
                       <th>Defender roll</th>
-                      <th>Attacker score</th>
-                      <th>Defender score</th>
+                      <th>Attacker {ch.result.maxHealthA ? 'damage' : 'score'}</th>
+                      <th>Defender {ch.result.maxHealthB ? 'damage' : 'score'}</th>
                     </tr>
                   </thead>
                   <tbody>

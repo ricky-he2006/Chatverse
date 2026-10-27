@@ -1,4 +1,8 @@
 PRAGMA foreign_keys=ON;
+CREATE TABLE IF NOT EXISTS kingdom_growth (kingdom TEXT PRIMARY KEY REFERENCES kingdoms(id),high_water INTEGER NOT NULL CHECK(high_water>=0));
+CREATE TABLE IF NOT EXISTS challenges (id TEXT PRIMARY KEY,template TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'open',winner_id TEXT,opened_at INTEGER NOT NULL,expires_at INTEGER NOT NULL,completed_at INTEGER);
+CREATE TABLE IF NOT EXISTS challenge_progress (challenge_id TEXT NOT NULL REFERENCES challenges(id),entity_id TEXT NOT NULL,score INTEGER NOT NULL,PRIMARY KEY(challenge_id,entity_id));
+CREATE TABLE IF NOT EXISTS challenge_contributions (challenge_id TEXT NOT NULL REFERENCES challenges(id),character_id TEXT NOT NULL REFERENCES characters(id),milestone_key TEXT NOT NULL,kingdom TEXT NOT NULL REFERENCES kingdoms(id),PRIMARY KEY(challenge_id,character_id,milestone_key));
 CREATE TABLE IF NOT EXISTS environment (id INTEGER PRIMARY KEY CHECK(id=1),mode TEXT NOT NULL CHECK(mode IN ('live','simulation')),generation TEXT NOT NULL,version INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY,value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY,subject TEXT UNIQUE NOT NULL,name TEXT NOT NULL,synthetic INTEGER NOT NULL CHECK(synthetic IN(0,1)));

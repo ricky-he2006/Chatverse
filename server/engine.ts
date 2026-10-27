@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { growthFor } from '../shared/expansion';
 import { CLASSES, ITEMS, RULESET } from '../shared/catalog';
 import type { BattleInput, BattleResult, ClassName, Stats, Tactic } from '../shared/types';
 export const hash = (value: unknown) =>
@@ -68,6 +69,44 @@ export function effectivePower(roster: { power: number }[]) {
   );
 }
 export function resolveBattle(input: BattleInput): BattleResult {
+  if (input.ruleset !== 'chatverse-v2') return resolveLegacyBattle(input);
+  const [a, b] = input.sides;
+  for (const side of input.sides) {
+    const growth = growthFor(side.population ?? -1);
+    if (
+      !Number.isSafeInteger(side.population) ||
+      side.population! < 0 ||
+      side.maxHealth !== growth.fortressHealth ||
+      side.healthBonusBp !== growth.healthBonusBp
+    )
+      throw new Error('Invalid frozen fortress health');
+  }
+  const legacy = resolveLegacyBattle({ ...input, ruleset: RULESET });
+  let healthA = a.maxHealth!,
+    healthB = b.maxHealth!;
+  const rounds = legacy.rounds.map((round) => {
+    const active = healthA > 0 && healthB > 0;
+    const scoreA = active ? Math.min(healthB, round.scoreA) : 0;
+    const scoreB = active ? Math.min(healthA, round.scoreB) : 0;
+    healthA -= scoreB;
+    healthB -= scoreA;
+    return { ...round, scoreA, scoreB };
+  });
+  const balance = healthA * b.maxHealth! - healthB * a.maxHealth!;
+  const canonical = {
+    winner: balance === 0 ? null : balance > 0 ? input.attacker : input.defender,
+    rounds,
+    scoreA: rounds.reduce((s, r) => s + r.scoreA, 0),
+    scoreB: rounds.reduce((s, r) => s + r.scoreB, 0),
+    healthA,
+    healthB,
+    maxHealthA: a.maxHealth!,
+    maxHealthB: b.maxHealth!,
+    ruleset: input.ruleset,
+  };
+  return { ...canonical, inputHash: hash(input), outputHash: hash(canonical) };
+}
+function resolveLegacyBattle(input: BattleInput): BattleResult {
   if (
     input.ruleset !== RULESET ||
     input.sides.some(

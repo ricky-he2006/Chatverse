@@ -369,6 +369,7 @@ export class TwitchIntegration {
       'elect',
     ];
     const reads = [
+      'challenges',
       'help',
       'profile',
       'stats',
@@ -407,6 +408,13 @@ export class TwitchIntegration {
         if (verb === 'help')
           message =
             'ChatVerse: !join north|east|west · !class rogue · !pledge · !vote attack|defend|raid · !profile · !inventory · !upgrade item-id';
+        else if (verb === 'challenges')
+          message =
+            this.world
+              .challengeSnapshots()
+              .filter((r) => r.status === 'open')
+              .map((r) => `${r.title}: ${r.leaders[0]?.score ?? 0}/${r.target}`)
+              .join(' · ') || 'The current realm races are closed. A new wave opens daily.';
         else if (verb === 'profile' || verb === 'stats' || verb === 'level') {
           if (!c) throw new RuleError('Begin with !join north, east or west.');
           const hero = this.world.character(c.id);

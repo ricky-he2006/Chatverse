@@ -43,6 +43,11 @@ export type Kingdom = {
   name: string;
   subtitle: string;
   color: string;
+  growthLevel?: number;
+  populationPeak?: number;
+  healthBonusBp?: number;
+  fortressHealth?: number;
+  nextExpansionAt?: number | null;
   citizens: number;
   territories: number;
   lord: string | null;
@@ -75,8 +80,15 @@ export type CombatSide = {
   roster: { id: string; name: string; power: number; stats: Stats }[];
   pledged: number;
   effective: number;
+  population?: number;
+  healthBonusBp?: number;
+  maxHealth?: number;
 };
 export type BattleResult = {
+  healthA?: number;
+  healthB?: number;
+  maxHealthA?: number;
+  maxHealthB?: number;
   winner: Faction | null;
   rounds: { round: number; rollA: number; rollB: number; scoreA: number; scoreB: number }[];
   scoreA: number;
@@ -153,6 +165,8 @@ export type IntegrationStatus = {
   subscriptions: boolean;
 };
 export type WorldSnapshot = {
+  worldVersion?: number;
+  challenges?: import('./expansion').RealmChallenge[];
   mode: Mode;
   generation: string;
   revision: number;

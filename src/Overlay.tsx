@@ -110,7 +110,11 @@ export function Overlay() {
               <span>
                 {FACTIONS[ch.attacker].name}
                 <strong>
-                  {ch.result ? ch.result.scoreA : `${ch.pledged[ch.attacker]} pledged`}
+                  {ch.result
+                    ? ch.result.maxHealthA
+                      ? `${ch.result.healthA}/${ch.result.maxHealthA} HP`
+                      : ch.result.scoreA
+                    : `${ch.pledged[ch.attacker]} pledged`}
                 </strong>
               </span>
             </div>
@@ -119,7 +123,11 @@ export function Overlay() {
               <span>
                 {FACTIONS[ch.defender].name}
                 <strong>
-                  {ch.result ? ch.result.scoreB : `${ch.pledged[ch.defender]} pledged`}
+                  {ch.result
+                    ? ch.result.maxHealthB
+                      ? `${ch.result.healthB}/${ch.result.maxHealthB} HP`
+                      : ch.result.scoreB
+                    : `${ch.pledged[ch.defender]} pledged`}
                 </strong>
               </span>
               <Crest faction={ch.defender} size={42} />
@@ -128,9 +136,14 @@ export function Overlay() {
           <div className="obs-score-track">
             <span
               style={{
-                width: ch.result
-                  ? `${(ch.result.scoreA / (ch.result.scoreA + ch.result.scoreB)) * 100}%`
-                  : '50%',
+                width:
+                  ch.result?.maxHealthA && ch.result?.maxHealthB
+                    ? ch.result.healthA === 0 && ch.result.healthB === 0
+                      ? '50%'
+                      : `${(ch.result.healthA! / ch.result.maxHealthA / (ch.result.healthA! / ch.result.maxHealthA + ch.result.healthB! / ch.result.maxHealthB || 1)) * 100}%`
+                    : ch.result
+                      ? `${(ch.result.scoreA / (ch.result.scoreA + ch.result.scoreB)) * 100}%`
+                      : '50%',
                 background: FACTIONS[ch.attacker].color,
               }}
             />

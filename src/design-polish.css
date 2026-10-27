@@ -622,3 +622,377 @@
     transform: none;
   }
 }
+.scenic-atlas {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 2.75;
+  overflow: hidden;
+  isolation: isolate;
+  background: #101a29;
+  border-radius: 12px;
+}
+.scenic-atlas > img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  filter: brightness(0.79) saturate(0.9);
+}
+.scenic-atlas::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  box-shadow: inset 0 0 70px #030a16a0;
+  z-index: 1;
+}
+.scenic-routes {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.scenic-routes line {
+  stroke-width: 1;
+  stroke-dasharray: 3 5;
+  opacity: 0.65;
+}
+.settlement {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  border: 0;
+  background: transparent;
+  padding: 4px;
+  color: #fff;
+  cursor: pointer;
+  text-shadow: 0 2px 5px #000;
+  white-space: nowrap;
+}
+.settlement:disabled {
+  opacity: 1;
+  cursor: default;
+}
+.settlement-pin {
+  display: grid;
+  place-items: center;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: #08101ddd;
+  color: var(--settlement);
+  border: 1px solid var(--settlement);
+  box-shadow: 0 0 22px #000;
+  font-size: 19px;
+}
+.settlement.capital .settlement-pin {
+  width: 36px;
+  height: 36px;
+  font-size: 27px;
+}
+.settlement strong {
+  font-size: 11px;
+  background: #07111bd9;
+  border-radius: 4px;
+  padding: 3px 7px;
+  margin-top: 3px;
+  border: 1px solid #ffffff20;
+}
+.settlement small {
+  font-size: 6px;
+  letter-spacing: 1px;
+  color: var(--settlement);
+}
+.settlement.selected .settlement-pin,
+.settlement:hover .settlement-pin,
+.settlement:focus-visible .settlement-pin {
+  outline: 2px solid #f4d8a2;
+  outline-offset: 4px;
+  box-shadow: 0 0 26px var(--settlement);
+}
+.frontier-fog {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  color: #c2c6d0;
+  z-index: 2;
+  text-shadow: 0 1px 5px black;
+}
+.frontier-fog::before {
+  content: '';
+  position: absolute;
+  width: 90px;
+  height: 80px;
+  top: -15px;
+  background: radial-gradient(ellipse, #0c1524e8, transparent 70%);
+  z-index: -1;
+}
+.frontier-fog span {
+  font-size: 25px;
+  opacity: 0.7;
+}
+.frontier-fog strong {
+  font-size: 8px;
+}
+.frontier-fog small {
+  font-size: 8px;
+  color: #e7ca92;
+}
+.atlas-caption {
+  position: absolute;
+  left: 18px;
+  bottom: 12px;
+  font:
+    14px Georgia,
+    serif;
+  color: #e8d3a5;
+  letter-spacing: 4px;
+  z-index: 2;
+}
+.atlas-caption span {
+  display: block;
+  font: 7px sans-serif;
+  letter-spacing: 2px;
+  margin-top: 4px;
+  color: #bcc6d1;
+}
+.scenic-atlas.compact .settlement strong {
+  font-size: 9px;
+}
+.scenic-atlas.compact .settlement-pin {
+  width: 18px;
+  height: 18px;
+  font-size: 12px;
+}
+.scenic-atlas.compact .atlas-caption {
+  display: none;
+}
+.world-screen-grid {
+  grid-template-columns: minmax(0, 1fr) 270px;
+  align-items: start;
+}
+.world-screen-grid > .full-map-panel {
+  grid-column: 1/-1;
+  grid-row: 1;
+}
+.world-screen-grid > .world-inspector {
+  grid-column: 2;
+  grid-row: 2 / span 2;
+}
+.world-growth-strip {
+  grid-column: 1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+.world-growth-strip > div:first-child {
+  grid-column: 1/-1;
+}
+.world-growth-strip h2,
+.challenge-heading h2 {
+  margin: 6px 0;
+}
+.world-growth-strip p,
+.challenge-heading p {
+  color: var(--muted);
+  font-size: 12px;
+  max-width: 650px;
+  line-height: 1.7;
+}
+.growth-kingdom {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  background: #101b27;
+  border: 1px solid #ffffff15;
+  border-top: 2px solid var(--settlement);
+  border-radius: 10px;
+  padding: 15px;
+  font-size: 12px;
+}
+.growth-kingdom b {
+  color: var(--settlement);
+  font-size: 16px;
+}
+.growth-kingdom small {
+  font-size: 10px;
+  color: #9aabb9;
+}
+.growth-kingdom .button {
+  font-size: 10px;
+  white-space: normal;
+}
+.world-growth-strip progress,
+.realm-challenges progress {
+  width: 100%;
+  height: 6px;
+  accent-color: #d6bc7d;
+  border: 0;
+}
+.realm-challenges {
+  grid-column: 1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+.challenge-heading {
+  grid-column: 1/-1;
+}
+.race-card {
+  padding: 18px !important;
+  min-width: 0;
+}
+.race-card h3 {
+  font:
+    20px Georgia,
+    serif;
+  margin: 12px 0;
+}
+.race-card p {
+  font-size: 12px;
+  color: #a8b6c3;
+  line-height: 1.7;
+  min-height: 65px;
+}
+.race-card .eyebrow {
+  font-size: 8px;
+}
+.race-card footer {
+  border-top: 1px solid #ffffff15;
+  padding-top: 14px;
+  margin-top: 18px;
+  font-size: 11px;
+  color: #e7ca92;
+}
+.race-card footer small {
+  display: block;
+  color: #9aabb9;
+  margin-top: 6px;
+  font-size: 9px;
+}
+.race-winner {
+  display: block;
+  color: #efd18d;
+  margin: 12px 0;
+}
+.race-leader {
+  margin-top: 14px;
+}
+.race-leader span {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 10px;
+  margin-bottom: 5px;
+}
+.race-leader b {
+  white-space: nowrap;
+}
+.race-card.completed {
+  border-color: #d4b87755;
+}
+.fortress-result {
+  font-size: 12px;
+  line-height: 1.7;
+  color: #d9c399;
+}
+@media (min-width: 1500px) {
+  .scenic-atlas .settlement strong {
+    font-size: 12px;
+  }
+}
+@media (max-width: 1100px) {
+  .world-screen-grid {
+    grid-template-columns: 1fr;
+  }
+  .world-screen-grid > .world-inspector {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  .world-growth-strip,
+  .realm-challenges {
+    grid-column: 1;
+  }
+  .scenic-atlas {
+    min-width: 680px;
+  }
+  .map-zoom-container {
+    overflow-x: auto;
+  }
+  .growth-kingdom {
+    padding: 12px;
+  }
+}
+@media (max-width: 650px) {
+  .world-growth-strip,
+  .realm-challenges {
+    grid-template-columns: 1fr;
+  }
+  .world-growth-strip > div:first-child,
+  .challenge-heading {
+    grid-column: 1;
+  }
+  .scenic-atlas.compact {
+    min-width: 0;
+  }
+  .scenic-atlas.compact .settlement strong {
+    font-size: 6px;
+    padding: 1px;
+  }
+  .scenic-atlas.compact .settlement-pin {
+    width: 13px;
+    height: 13px;
+    font-size: 9px;
+  }
+}
+.fortress-bars {
+  display: grid;
+  gap: 10px;
+  padding: 16px 0;
+}
+.fortress-bars > small {
+  font-size: 8px;
+  letter-spacing: 1px;
+  color: #94a5b5;
+}
+.fortress-meter {
+  width: 100%;
+  max-width: 300px;
+  margin: 12px auto;
+  color: var(--settlement);
+  font-size: 10px;
+}
+.fortress-meter span {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.fortress-meter progress {
+  width: 100%;
+  height: 8px;
+  accent-color: var(--settlement);
+  margin-top: 7px;
+}
+.fortress-meter b {
+  font-weight: 500;
+  white-space: nowrap;
+}
+.world-growth-strip progress::-webkit-progress-bar,
+.realm-challenges progress::-webkit-progress-bar,
+.fortress-meter progress::-webkit-progress-bar {
+  background: #263342;
+  border-radius: 6px;
+}
+.world-growth-strip progress::-webkit-progress-value,
+.realm-challenges progress::-webkit-progress-value,
+.fortress-meter progress::-webkit-progress-value {
+  background: var(--settlement, #d6bc7d);
+  border-radius: 6px;
+  transition: width 0.35s ease;
+}
