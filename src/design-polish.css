@@ -1,0 +1,624 @@
+/* Everfall art direction: one illustrated world, three recognizable banners. */
+.realm-artwork {
+  object-fit: cover;
+  object-position: 62% 50%;
+}
+.welcome-banner {
+  height: 288px;
+  min-height: 288px;
+  border-color: #7e6a404d;
+  background: #111d28;
+  box-shadow:
+    inset 0 0 0 1px #d4b47809,
+    0 14px 45px #00000015;
+}
+.welcome-banner::after {
+  background:
+    linear-gradient(90deg, #0b1725f5 0%, #0b1725e3 25%, #0b17258f 44%, #0b17251c 68%, #0b172510),
+    linear-gradient(0deg, #0a141db3, transparent 42%);
+}
+.welcome-banner::before {
+  content: '';
+  position: absolute;
+  z-index: 2;
+  inset: 9px;
+  border: 1px solid #e5cf9630;
+  border-radius: 4px;
+  pointer-events: none;
+  clip-path: polygon(
+    0 0,
+    42px 0,
+    42px 1px,
+    1px 1px,
+    1px 42px,
+    0 42px,
+    0 0,
+    100% 0,
+    100% 42px,
+    calc(100% - 1px) 42px,
+    calc(100% - 1px) 1px,
+    calc(100% - 42px) 1px,
+    calc(100% - 42px) 0,
+    100% 0,
+    100% 100%,
+    calc(100% - 42px) 100%,
+    calc(100% - 42px) calc(100% - 1px),
+    calc(100% - 1px) calc(100% - 1px),
+    calc(100% - 1px) calc(100% - 42px),
+    100% calc(100% - 42px),
+    100% 100%,
+    0 100%,
+    0 calc(100% - 42px),
+    1px calc(100% - 42px),
+    1px calc(100% - 1px),
+    42px calc(100% - 1px),
+    42px 100%,
+    0 100%
+  );
+}
+.welcome-copy {
+  padding: 30px 34px;
+  max-width: 540px;
+}
+.welcome-copy h2 {
+  font-size: 38px;
+  line-height: 1.12;
+  letter-spacing: -1.1px;
+  text-shadow: 0 2px 20px #0006;
+}
+.welcome-copy .eyebrow {
+  color: #ead5a5;
+  font-size: 9px;
+  letter-spacing: 2.1px;
+}
+.welcome-copy p {
+  color: #bac7cd;
+  font-size: 12px;
+  line-height: 1.8;
+  margin-top: 13px;
+}
+.hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 19px;
+  margin-top: 19px;
+}
+.hero-actions > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 0;
+  background: none;
+  padding: 0;
+  color: #e1d2b1;
+  font-size: 11px;
+}
+.hero-actions > .hero-primary {
+  padding: 10px 12px;
+  background: #d8bf87;
+  border: 1px solid #ead3a17a;
+  border-radius: 5px;
+  color: #19201f;
+  box-shadow: 0 3px 15px #0003;
+  font-weight: 600;
+}
+.hero-primary:hover {
+  background: #f0d7a0;
+  transform: translateY(-1px);
+}
+.hero-caption {
+  right: 29px;
+  bottom: 29px;
+  padding: 12px 14px;
+  backdrop-filter: blur(10px);
+  background: #0d192866;
+  border: 1px solid #e7cf8c30;
+  border-radius: 5px;
+}
+.hero-caption small {
+  font-size: 7px;
+  letter-spacing: 1.2px;
+  color: #d1c8b2;
+  margin-top: 6px;
+}
+.stat-card {
+  border-color: #aebbc821;
+  background: linear-gradient(120deg, #19232e, #121923 74%);
+}
+.stat-icon {
+  border-radius: 50%;
+}
+.stat-card .stat-number {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 34px;
+  letter-spacing: -0.8px;
+}
+.campaign-desk {
+  margin: 26px 0 29px;
+  padding: 22px 23px;
+  border: 1px solid #a8996b2e;
+  border-radius: 8px;
+  background: linear-gradient(110deg, #a68b4c0a, #111b2600 40%), #111923;
+}
+.desk-intro {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid #3c42402b;
+  padding-bottom: 17px;
+  margin-bottom: 19px;
+}
+.desk-intro .eyebrow {
+  font-size: 8px;
+  letter-spacing: 1.7px;
+  color: #b2a687;
+}
+.desk-intro h2 {
+  font-size: 21px;
+  letter-spacing: -0.2px;
+}
+.desk-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+.desk-actions > button {
+  display: flex;
+  align-items: start;
+  gap: 12px;
+  padding: 8px 11px;
+  text-align: left;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  min-width: 0;
+}
+.desk-actions > button:hover {
+  background: #aebbc608;
+  border-color: #aebbc61a;
+}
+.desk-icon {
+  width: 37px;
+  height: 39px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: #d7b6760a;
+  border: 1px solid #d7b6762e;
+  border-radius: 7px;
+  color: #d7bd8a;
+}
+.desk-icon.viewer {
+  color: #8ab8ce;
+  background: #75a9ca0b;
+  border-color: #75a9ca2c;
+}
+.desk-icon.chronicle {
+  color: #b2a1d0;
+  background: #a68cce0a;
+  border-color: #a68cce2e;
+}
+.desk-actions > button > span {
+  min-width: 0;
+}
+.desk-actions small {
+  display: block;
+  font-size: 7px;
+  letter-spacing: 1.2px;
+  color: #98a7af;
+  margin: 0 0 7px;
+}
+.desk-actions strong {
+  font-size: 12px;
+  line-height: 1.65;
+  display: block;
+  font-weight: 400;
+  color: #d8e0dd;
+}
+.desk-actions em {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #bbad8d;
+  font-size: 10px;
+  font-style: normal;
+  margin-top: 9px;
+}
+.kingdom-scene {
+  height: 166px;
+  isolation: isolate;
+}
+.kingdom-artwork {
+  position: absolute;
+  inset: 0;
+  background-image: url('/everfall-realms-v2.png');
+  background-size: 310% auto;
+  background-repeat: no-repeat;
+  z-index: -2;
+  transition:
+    transform 0.5s ease,
+    filter 0.5s ease;
+}
+.artwork-north {
+  background-position: 0% 43%;
+}
+.artwork-east {
+  background-position: 53% 40%;
+}
+.artwork-west {
+  background-position: 100% 40%;
+}
+.kingdom-scene::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(0deg, #101923f0, transparent 65%), linear-gradient(90deg, #10192322, #10192308);
+}
+.kingdom-silhouette {
+  display: none;
+}
+.kingdom-scene > .crest {
+  background: #0e1924b5;
+  border: 1px solid color-mix(in srgb, var(--faction) 35%, transparent);
+  box-shadow: 0 7px 27px #0006;
+  padding: 9px;
+  width: 68px;
+  height: 78px;
+  border-radius: 6px;
+  transform: translateY(12px);
+}
+.kingdom-card:hover .kingdom-artwork {
+  transform: scale(1.045);
+  filter: brightness(1.12);
+}
+.kingdom-card {
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
+}
+.kingdom-card:hover {
+  border-color: color-mix(in srgb, var(--faction) 45%, #27313d);
+  box-shadow: 0 8px 30px #0002;
+}
+.kingdom-territory-count {
+  background: #101b2ad9;
+  border-color: #a8b7bc38;
+  padding: 6px 8px;
+  font-size: 8px;
+  backdrop-filter: blur(10px);
+}
+.kingdom-card-content {
+  padding: 22px;
+}
+.kingdom-card h3 {
+  font-size: 25px;
+  letter-spacing: -0.4px;
+}
+.kingdom-card .button {
+  background: color-mix(in srgb, var(--faction) 8%, #151e29);
+}
+.kingdom-detail-banner {
+  isolation: isolate;
+  position: relative;
+  overflow: hidden;
+}
+.kingdom-detail-banner::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  background-image: url('/everfall-realms-v2.png');
+  background-size: 300% auto;
+  background-position: 0% 43%;
+  opacity: 0.65;
+}
+.kingdom-detail-banner.east::before {
+  background-position: 53% 43%;
+}
+.kingdom-detail-banner.west::before {
+  background-position: 100% 43%;
+}
+.kingdom-detail-banner::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(90deg, #101923d9, #101923b0 48%, #10192370);
+}
+.world-svg {
+  background: #122431;
+}
+.map-region {
+  transition:
+    filter 0.2s,
+    stroke 0.2s,
+    stroke-width 0.2s;
+}
+.map-region:hover {
+  filter: brightness(1.15) saturate(1.1);
+}
+.map-selection-ring {
+  animation: atlas-selection 4s ease-in-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+@keyframes atlas-selection {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.14);
+  }
+}
+.territory-list > button:hover,
+.neighbor-list > button:hover {
+  background: #c9b77b0b;
+  border-color: #b5a5714d;
+}
+.item-row {
+  transition: background 0.15s;
+}
+.item-row:hover {
+  background: #b9c8cc04;
+}
+.item-art {
+  box-shadow: inset 0 0 17px #0002;
+}
+.world-inspector > .panel:first-child {
+  border-top: 2px solid #d9bf8a66;
+}
+.world-inspector > .panel:first-child h2 {
+  font-size: 29px;
+}
+.chapter-card {
+  border-color: #9a855530;
+  background: radial-gradient(ellipse at 50% 0, #a48c5910, transparent 65%), #121923;
+}
+.chapter-card .panel-heading .tag {
+  padding: 5px 7px;
+}
+.toast {
+  border-radius: 8px;
+  backdrop-filter: blur(18px);
+  box-shadow: 0 12px 45px #0006;
+}
+@media (min-width: 1600px) {
+  .welcome-banner {
+    height: 312px;
+  }
+  .welcome-copy {
+    padding: 35px 39px;
+  }
+  .welcome-copy h2 {
+    font-size: 43px;
+  }
+  .welcome-copy p {
+    font-size: 13px;
+  }
+  .hero-actions {
+    margin-top: 22px;
+  }
+  .hero-actions > button {
+    font-size: 12px;
+  }
+  .kingdom-scene {
+    height: 190px;
+  }
+}
+@media (max-width: 1100px) {
+  .welcome-copy {
+    padding: 28px;
+  }
+  .welcome-copy h2 {
+    font-size: 35px;
+  }
+  .hero-actions {
+    gap: 13px;
+  }
+  .hero-actions > button {
+    font-size: 10px;
+  }
+  .hero-caption {
+    padding: 10px;
+    right: 22px;
+    bottom: 22px;
+  }
+  .hero-caption small {
+    font-size: 6px;
+  }
+  .desk-actions {
+    gap: 9px;
+  }
+  .desk-actions > button {
+    padding: 6px;
+    gap: 9px;
+  }
+  .desk-icon {
+    width: 31px;
+    height: 34px;
+  }
+  .desk-actions strong {
+    font-size: 11px;
+  }
+  .desk-actions small {
+    font-size: 6px;
+    letter-spacing: 0.9px;
+  }
+  .desk-actions em {
+    font-size: 9px;
+  }
+  .kingdom-card-content {
+    padding: 17px;
+  }
+  .kingdom-card h3 {
+    font-size: 23px;
+  }
+}
+@media (max-width: 800px) {
+  .welcome-banner {
+    height: 290px;
+  }
+  .hero-caption {
+    display: none;
+  }
+  .desk-intro {
+    align-items: start;
+    flex-direction: column;
+    gap: 9px;
+  }
+  .desk-actions {
+    grid-template-columns: 1fr;
+  }
+  .desk-actions > button {
+    padding: 11px 8px;
+    gap: 14px;
+    border-bottom-color: #6d7d7e1a;
+  }
+  .desk-icon {
+    width: 39px;
+    height: 42px;
+  }
+  .desk-actions strong {
+    font-size: 13px;
+  }
+  .desk-actions small {
+    font-size: 8px;
+  }
+  .desk-actions em {
+    font-size: 11px;
+  }
+  .campaign-desk {
+    padding: 21px;
+    margin-top: 22px;
+  }
+  .desk-actions > button:last-child {
+    border-bottom: 0;
+  }
+  .kingdom-scene {
+    height: 145px;
+  }
+}
+@media (max-width: 600px) {
+  .welcome-banner {
+    height: 310px;
+    min-height: 310px;
+  }
+  .welcome-banner > .realm-artwork {
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: 58% center;
+    opacity: 0.8;
+  }
+  .welcome-banner::after {
+    background:
+      linear-gradient(90deg, #0b1725d9, #0b17259c 60%, #0b172528),
+      linear-gradient(0deg, #0b1725a8, transparent);
+  }
+  .welcome-copy {
+    padding: 27px 24px;
+    max-width: none;
+  }
+  .welcome-copy h2 {
+    font-size: 35px;
+    letter-spacing: -0.9px;
+  }
+  .welcome-copy .eyebrow {
+    font-size: 7px;
+    letter-spacing: 1.5px;
+  }
+  .welcome-copy p {
+    font-size: 11px;
+    line-height: 1.9;
+    margin-top: 14px;
+  }
+  .hero-actions {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 19px;
+  }
+  .hero-actions > button {
+    font-size: 11px;
+    min-height: 30px;
+  }
+  .hero-actions > .hero-primary {
+    padding: 10px 12px;
+  }
+  .kingdom-scene {
+    height: 100%;
+    min-height: 245px;
+  }
+  .kingdom-artwork {
+    background-size: auto 100%;
+  }
+  .artwork-north {
+    background-position: 0% center;
+  }
+  .artwork-east {
+    background-position: 57% center;
+  }
+  .artwork-west {
+    background-position: 100% center;
+  }
+  .kingdom-scene > .crest {
+    width: 59px;
+    height: 69px;
+    padding: 8px;
+    transform: translateY(-6px);
+  }
+  .kingdom-card-content {
+    padding: 20px 15px;
+  }
+  .kingdom-card h3 {
+    font-size: 24px;
+  }
+  .kingdom-territory-count {
+    padding: 5px 6px;
+    font-size: 7px;
+    bottom: 20px;
+  }
+  .campaign-desk {
+    padding: 20px 16px;
+  }
+  .desk-intro h2 {
+    font-size: 23px;
+  }
+  .desk-actions strong {
+    font-size: 13px;
+  }
+  .desk-actions small {
+    font-size: 8px;
+  }
+  .kingdom-detail-banner::before {
+    background-size: auto 100%;
+  }
+  .kingdom-detail-banner::after {
+    background: linear-gradient(90deg, #101923e0, #101923a8);
+  }
+  .stat-card .stat-number {
+    font-size: 32px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .map-selection-ring {
+    animation: none;
+  }
+  .kingdom-artwork,
+  .hero-primary,
+  .kingdom-card {
+    transition: none;
+  }
+  .hero-primary:hover,
+  .kingdom-card:hover .kingdom-artwork {
+    transform: none;
+  }
+}

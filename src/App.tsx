@@ -73,7 +73,7 @@ import type {
 } from '../shared/types';
 import { CLASSES, FACTIONS, ITEMS, SCENARIOS, TACTICS } from '../shared/catalog';
 import { ApiError, mutate, request, setCsrf } from './api';
-import { Crest, Landscape, WorldMap } from './WorldMap';
+import { Crest, Landscape, RealmArtwork, WorldMap } from './WorldMap';
 import {
   ago,
   Avatar,
@@ -146,6 +146,8 @@ type Context = {
   notify: (text: string) => void;
   selectedFaction: Faction;
   setFaction: (f: Faction) => void;
+  selectedTerritory: string;
+  setTerritory: (id: string) => void;
   selectedBattle: string | null;
   setBattle: (id: string) => void;
 };
@@ -170,6 +172,7 @@ export function App() {
   );
   const [selectedFaction, setFaction] = useState<Faction>('north'),
     [selectedBattle, setBattle] = useState<string | null>(null);
+  const [selectedTerritory, setTerritory] = useState('crossroads');
   const [modal, setModal] = useState<ModalState>(null),
     [toast, setToast] = useState(''),
     [mobileNav, setMobileNav] = useState(false),
@@ -405,6 +408,8 @@ export function App() {
         notify,
         selectedFaction,
         setFaction,
+        selectedTerritory,
+        setTerritory,
         selectedBattle,
         setBattle,
       }
@@ -710,10 +715,11 @@ function PageHeader({ ctx, screen }: { ctx: Context; screen: Screen }) {
 
 function Overview({ ctx }: { ctx: Context }) {
   const s = ctx.s;
+  const councilOpen = s.chapter?.status === 'open' || s.chapter?.status === 'paused';
   return (
     <>
       <section className="welcome-banner">
-        <Landscape />
+        <RealmArtwork />
         <div className="welcome-copy">
           <span className="eyebrow">
             <span className="tiny-line" />
@@ -728,14 +734,27 @@ function Overview({ ctx }: { ctx: Context }) {
             <br />
             You keep playing. The story keeps growing.
           </p>
-          <button onClick={() => ctx.go('world')}>
-            Explore your realm <ArrowRight size={15} />
-          </button>
+          <div className="hero-actions">
+            <button
+              className="hero-primary"
+              onClick={() => (councilOpen ? ctx.go('battles') : ctx.setModal({ kind: 'chapter' }))}
+            >
+              {councilOpen ? <Swords size={14} /> : <Flag size={14} />}{' '}
+              {councilOpen ? 'Return to the council' : 'Write the next chapter'}
+              <ArrowRight size={14} />
+            </button>
+            <button onClick={() => ctx.go('world')}>
+              Explore the atlas <ArrowUpRight size={14} />
+            </button>
+          </div>
         </div>
         <div className="hero-caption">
           <Compass size={13} />
           <span>
-            EVERFALL <small>A REALM IN THE MAKING</small>
+            EVERFALL{' '}
+            <small>
+              SEASON {s.season.number} · {countdown(s.season.endsAt, ctx.now)} REMAINING
+            </small>
           </span>
         </div>
       </section>
@@ -797,6 +816,7 @@ function Overview({ ctx }: { ctx: Context }) {
               territories={s.territories}
               compact
               onSelect={(id) => {
+                ctx.setTerritory(id);
                 ctx.setFaction(s.territories.find((t) => t.id === id)!.owner);
                 ctx.go('world');
               }}
@@ -850,6 +870,7 @@ function Overview({ ctx }: { ctx: Context }) {
           </Panel>
         </div>
       </div>
+      <CampaignDesk ctx={ctx} />
       <div className="section-heading">
         <div>
           <span className="eyebrow">THE PEOPLE BEHIND THE BANNERS</span>
@@ -891,6 +912,77 @@ function Overview({ ctx }: { ctx: Context }) {
         </Panel>
       </div>
     </>
+  );
+}
+
+function CampaignDesk({ ctx }: { ctx: Context }) {
+  const active = ctx.s.chapter?.status === 'open' || ctx.s.chapter?.status === 'paused';
+  const connected = ctx.s.mode === 'simulation' || ctx.s.integration.connected;
+  const chapterTitle = active
+    ? 'Your council is gathering.'
+    : !connected
+      ? 'Bring your real chat home.'
+      : 'Give your chat its next adventure.';
+  return (
+    <section className="campaign-desk" aria-label="Your next moves">
+      <div className="desk-intro">
+        <span className="eyebrow">THE CAMPAIGN DESK</span>
+        <h2>Where will today take you?</h2>
+      </div>
+      <div className="desk-actions">
+        <button
+          onClick={() =>
+            !connected
+              ? ctx.go('settings')
+              : active
+                ? ctx.go('battles')
+                : ctx.setModal({ kind: 'chapter' })
+          }
+        >
+          <div className="desk-icon">
+            <Swords size={19} />
+          </div>
+          <span>
+            <small>FOR THE STREAMER</small>
+            <strong>{chapterTitle}</strong>
+            <em>
+              {!connected ? 'Connect Twitch' : active ? 'Open the council' : 'Launch a chapter'}
+              <ArrowUpRight size={12} />
+            </em>
+          </span>
+        </button>
+        <button onClick={() => ctx.go(ctx.hero ? 'character' : 'citizens')}>
+          <div className="desk-icon viewer">
+            <Shield size={19} />
+          </div>
+          <span>
+            <small>FOR YOUR CITIZENS</small>
+            <strong>
+              {ctx.hero
+                ? `${ctx.hero.name.split(' ')[0]}’s story continues.`
+                : 'A place for every adventurer.'}
+            </strong>
+            <em>
+              {ctx.hero ? `Level ${ctx.hero.level} · ${ctx.hero.gold} gold` : 'Explore characters'}
+              <ArrowUpRight size={12} />
+            </em>
+          </span>
+        </button>
+        <button onClick={() => ctx.go('chronicle')}>
+          <div className="desk-icon chronicle">
+            <BookOpen size={19} />
+          </div>
+          <span>
+            <small>FOR THE CHRONICLE</small>
+            <strong>{ctx.s.events[0]?.title ?? 'Your first page awaits.'}</strong>
+            <em>
+              Catch up on your realm
+              <ArrowUpRight size={12} />
+            </em>
+          </span>
+        </button>
+      </div>
+    </section>
   );
 }
 
@@ -1031,6 +1123,7 @@ function KingdomCard({ ctx, faction }: { ctx: Context; faction: Faction }) {
   return (
     <Panel className={`kingdom-card ${faction}`} style={{ '--faction': k.color } as CSSProperties}>
       <div className="kingdom-scene">
+        <div className={`kingdom-artwork artwork-${faction}`} aria-hidden="true" />
         <div className="faction-stars" />
         <div className="kingdom-silhouette" />
         <Crest faction={faction} size={64} />
@@ -1112,8 +1205,9 @@ function EventList({ ctx, events }: { ctx: Context; events: WorldEvent[] }) {
 }
 
 function WorldScreen({ ctx }: { ctx: Context }) {
-  const [selected, setSelected] = useState('crossroads'),
-    [list, setList] = useState(false),
+  const selected = ctx.selectedTerritory,
+    setSelected = ctx.setTerritory;
+  const [list, setList] = useState(false),
     [zoom, setZoom] = useState(1);
   const t = ctx.s.territories.find((t) => t.id === selected)!,
     k = ctx.s.kingdoms.find((k) => k.id === t.owner)!;
@@ -1191,7 +1285,13 @@ function WorldScreen({ ctx }: { ctx: Context }) {
           <dl className="detail-list">
             <div>
               <dt>Status</dt>
-              <dd>{t.capital ? 'Protected capital' : 'Open border'}</dd>
+              <dd>
+                {t.capital
+                  ? 'Protected capital'
+                  : t.contestedToday
+                    ? 'Resting until tomorrow'
+                    : 'Open border'}
+              </dd>
             </div>
             <div>
               <dt>Owner</dt>
@@ -1215,10 +1315,11 @@ function WorldScreen({ ctx }: { ctx: Context }) {
             <Button
               className="full"
               variant="primary"
+              disabled={t.contestedToday}
               onClick={() => ctx.setModal({ kind: 'chapter' })}
             >
               <Swords size={15} />
-              Plan a chapter
+              {t.contestedToday ? 'Border at rest' : 'Plan a chapter'}
             </Button>
           )}
         </Panel>
@@ -1254,7 +1355,10 @@ function KingdomScreen({ ctx }: { ctx: Context }) {
           </button>
         ))}
       </div>
-      <div className="kingdom-detail-banner" style={{ '--faction': k.color } as CSSProperties}>
+      <div
+        className={`kingdom-detail-banner ${k.id}`}
+        style={{ '--faction': k.color } as CSSProperties}
+      >
         <div className="kingdom-detail-emblem">
           <Crest faction={k.id} size={92} />
         </div>

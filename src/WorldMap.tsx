@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useId, useState } from 'react';
 import { FACTIONS, TERRITORIES } from '../shared/catalog';
 import type { Faction, Territory } from '../shared/types';
 
@@ -96,7 +96,9 @@ export function WorldMap({
   compact?: boolean;
 }) {
   const prefix = useId().replaceAll(':', '');
-  const map = territories.length ? territories : TERRITORIES;
+  const [hovered, setHovered] = useState<string | null>(null);
+  const map: Territory[] = territories.length ? territories : TERRITORIES;
+  const active = map.find((territory) => territory.id === (hovered ?? selected));
   const points: Record<string, [number, number]> = {
     northhold: [340, 100],
     frostpass: [245, 221],
@@ -125,6 +127,30 @@ export function WorldMap({
         <pattern id={`${prefix}grid`} width="40" height="40" patternUnits="userSpaceOnUse">
           <path d="M40 0H0v40" fill="none" stroke="#71889a" strokeOpacity=".04" />
         </pattern>
+        <pattern id={`${prefix}terrain`} width="85" height="70" patternUnits="userSpaceOnUse">
+          <path
+            d="M-10 31C9 8 24 12 40 27S74 49 95 25M-10 40C9 17 24 21 40 36S74 58 95 34M-10 49C9 26 24 30 40 45S74 67 95 43"
+            fill="none"
+            stroke="#d5cd9b"
+            strokeWidth=".55"
+            opacity=".16"
+          />
+        </pattern>
+        {(['north', 'east', 'west'] as Faction[]).map((faction) => (
+          <linearGradient key={faction} id={`${prefix}land-${faction}`} x2=".8" y2="1">
+            <stop
+              stopColor={
+                faction === 'north' ? '#48676d' : faction === 'east' ? '#795c41' : '#5c506c'
+              }
+            />
+            <stop
+              offset="1"
+              stopColor={
+                faction === 'north' ? '#253f46' : faction === 'east' ? '#453c31' : '#343447'
+              }
+            />
+          </linearGradient>
+        ))}
         <filter id={`${prefix}shadow`}>
           <feDropShadow dx="0" dy="5" stdDeviation="5" floodOpacity=".3" />
         </filter>
@@ -137,14 +163,19 @@ export function WorldMap({
           <polygon
             key={t.id}
             points={regions[t.id]}
-            fill={t.owner === 'north' ? '#334e54' : t.owner === 'east' ? '#59463a' : '#414050'}
-            stroke={selected === t.id ? '#e8d3a0' : FACTIONS[t.owner].color}
-            strokeWidth={selected === t.id ? 2.5 : 0.8}
-            strokeOpacity={selected === t.id ? 1 : 0.35}
+            fill={`url(#${prefix}land-${t.owner})`}
+            stroke={active?.id === t.id ? '#f0d8a2' : FACTIONS[t.owner].color}
+            strokeWidth={active?.id === t.id ? 2.5 : 0.8}
+            strokeOpacity={active?.id === t.id ? 1 : 0.45}
             className={onSelect ? 'map-region' : ''}
             tabIndex={onSelect ? 0 : undefined}
             role={onSelect ? 'button' : undefined}
             aria-label={`${t.name}, ${t.owner}${t.capital ? ', capital' : ''}`}
+            aria-pressed={onSelect ? selected === t.id : undefined}
+            onMouseEnter={() => setHovered(t.id)}
+            onMouseLeave={() => setHovered(null)}
+            onFocus={() => setHovered(t.id)}
+            onBlur={() => setHovered(null)}
             onClick={() => onSelect?.(t.id)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {
@@ -156,6 +187,15 @@ export function WorldMap({
         ))}
       </g>
       <g pointerEvents="none">
+        {map.map((t) => (
+          <polygon key={`terrain-${t.id}`} points={regions[t.id]} fill={`url(#${prefix}terrain)`} />
+        ))}
+        <path
+          d="M16 16h38M16 16v38M824 16h-38M824 16v38M16 464h38M16 464v-38M824 464h-38M824 464v-38"
+          stroke="#d5c18b"
+          strokeOpacity=".32"
+          fill="none"
+        />
         <path
           d="M401 64Q365 150 390 188T407 232Q468 308 460 381T489 464"
           fill="none"
@@ -201,6 +241,29 @@ export function WorldMap({
           const [x, y] = points[t.id];
           return (
             <g key={t.id} filter={`url(#${prefix}shadow)`}>
+              {active?.id === t.id && (
+                <>
+                  <ellipse
+                    cx={x}
+                    cy={y - 7}
+                    rx="37"
+                    ry="17"
+                    fill={FACTIONS[t.owner].color}
+                    opacity=".12"
+                  />
+                  <ellipse
+                    className="map-selection-ring"
+                    cx={x}
+                    cy={y - 7}
+                    rx="28"
+                    ry="12"
+                    fill="none"
+                    stroke="#edd9a7"
+                    strokeWidth="1"
+                    strokeDasharray="3 4"
+                  />
+                </>
+              )}
               {t.capital ? (
                 <Castle
                   x={x}
@@ -261,6 +324,31 @@ export function WorldMap({
             </g>
           );
         })}
+        {active && !compact && (
+          <g transform="translate(586 24)">
+            <rect
+              width="224"
+              height="62"
+              rx="5"
+              fill="#101c25"
+              fillOpacity=".94"
+              stroke={FACTIONS[active.owner].color}
+              strokeOpacity=".45"
+            />
+            <circle cx="17" cy="19" r="3" fill={FACTIONS[active.owner].color} />
+            <text x="29" y="23" fill="#f0eadc" fontFamily="Georgia,serif" fontSize="15">
+              {active.name}
+            </text>
+            <text x="14" y="44" fill="#aebebd" fontSize="9">
+              {active.capital
+                ? 'Protected capital'
+                : active.contestedToday
+                  ? 'Resting until the next campaign day'
+                  : 'Contested border'}{' '}
+              · {active.owner.toUpperCase()}
+            </text>
+          </g>
+        )}
         <g transform="translate(763 405)" opacity=".55" stroke="#c8bc96" fill="none">
           <path d="M0-25v50M-25 0h50M-16-16l32 32M-16 16l32-32" strokeWidth=".6" />
           <path d="M0-20 5-5 0 0-5-5Z" fill="#c8bc96" />
@@ -274,6 +362,19 @@ export function WorldMap({
         </text>
       </g>
     </svg>
+  );
+}
+export function RealmArtwork() {
+  return (
+    <img
+      className="landscape realm-artwork"
+      src="/everfall-realms-v2.png"
+      width={2172}
+      height={724}
+      alt=""
+      decoding="async"
+      fetchPriority="high"
+    />
   );
 }
 export function Landscape() {
