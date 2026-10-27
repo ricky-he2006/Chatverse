@@ -80,6 +80,52 @@ test('simulated arrivals are authenticated, bounded, idempotent, and unavailable
     await f.close();
   }
 });
+test('supporter previews require authentication, valid tiers and Simulation routes', async () => {
+  const f = await setup();
+  try {
+    const url = '/api/simulation/characters/sim-0001/supporter';
+    assert.equal(
+      (await f.app.inject({ method: 'POST', url, payload: { tier: 1 } })).statusCode,
+      401,
+    );
+    assert.equal(
+      (
+        await f.app.inject({
+          method: 'POST',
+          url,
+          payload: { tier: 1 },
+          headers: { cookie: f.headers.cookie },
+        })
+      ).statusCode,
+      403,
+    );
+    assert.equal(
+      (await f.app.inject({ method: 'POST', url, payload: { tier: 4 }, headers: f.headers }))
+        .statusCode,
+      400,
+    );
+    assert.equal(
+      (await f.app.inject({ method: 'POST', url, payload: { tier: 1 }, headers: f.headers }))
+        .statusCode,
+      200,
+    );
+    assert.equal(f.worlds.simulation.character('sim-0001').supporter!.title, 'Knight');
+    assert.equal(
+      (
+        await f.app.inject({
+          method: 'POST',
+          url: '/api/live/characters/sim-0001/supporter',
+          payload: { tier: 3 },
+          headers: f.headers,
+        })
+      ).statusCode,
+      404,
+    );
+  } finally {
+    await f.close();
+  }
+});
+
 test('dashboard authentication, CSRF, origin checks and bounded request schemas', async () => {
   const f = await setup();
   try {

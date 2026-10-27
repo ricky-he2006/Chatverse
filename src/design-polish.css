@@ -996,3 +996,184 @@
   border-radius: 6px;
   transition: width 0.35s ease;
 }
+.identity-badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin: 5px 0;
+  vertical-align: middle;
+}
+.supporter-badge,
+.elected-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid color-mix(in srgb, var(--rank, #e6c68a) 35%, transparent);
+  color: var(--rank, #e6c68a);
+  background: color-mix(in srgb, var(--rank, #e6c68a) 6%, #0c1520);
+  padding: 4px 7px;
+  border-radius: 5px;
+  font-size: 10px !important;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.supporter-badge small {
+  font-size: 6px !important;
+  letter-spacing: 0.7px;
+  opacity: 0.65;
+  display: inline !important;
+}
+.elected-badge {
+  --rank: #e6c68a;
+}
+.avatar.supporter-frame-1 {
+  border: 1px solid #83cdbb88;
+  box-shadow: 0 0 0 3px #83cdbb0b;
+}
+.avatar.supporter-frame-2 {
+  border: 1px solid #b8a0eeaa;
+  box-shadow: 0 0 0 3px #b8a0ee15;
+}
+.avatar.supporter-frame-3 {
+  border: 2px solid #edca83;
+  box-shadow:
+    0 0 0 4px #edca8312,
+    0 0 22px #edca8315;
+}
+.supporter-hall > p {
+  color: #9eafbe;
+  font-size: 12px;
+  line-height: 1.8;
+  max-width: 740px;
+}
+.supporter-rank-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 20px 0;
+}
+.rank-honor {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 10px;
+  padding: 20px 10px 13px;
+  border: 1px solid #ffffff12;
+  border-radius: 10px;
+  position: relative;
+  overflow: hidden;
+  background: radial-gradient(
+    ellipse at top,
+    color-mix(in srgb, var(--rank) 9%, transparent),
+    transparent 75%
+  );
+}
+.rank-honor.current {
+  border-color: var(--rank);
+  box-shadow: inset 0 0 30px color-mix(in srgb, var(--rank) 6%, transparent);
+}
+.rank-honor strong {
+  font:
+    23px Georgia,
+    serif;
+  color: var(--rank);
+}
+.rank-honor > span:not(.honor-sigil) {
+  font-size: 10px;
+  color: var(--rank);
+  min-height: 24px;
+}
+.rank-honor small {
+  font-size: 9px;
+  color: #99aabb;
+}
+.rank-honor b {
+  font-size: 8px;
+  font-weight: 500;
+  color: var(--rank);
+}
+.honor-sigil {
+  width: 49px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  color: var(--rank);
+  background: linear-gradient(150deg, color-mix(in srgb, var(--rank) 17%, #0c1520), #0c1520);
+  clip-path: polygon(0 0, 100% 0, 100% 80%, 50% 100%, 0 80%);
+}
+.rank-honor .button {
+  font-size: 9px;
+  padding: 7px 9px;
+  margin-top: auto;
+}
+.honor-footnote {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-size: 11px;
+  color: #adbcad;
+  line-height: 1.8;
+}
+.honor-footnote svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+.supporter-arrival {
+  border-color: #e6c68a !important;
+  animation: honor-arrival 0.65s ease-out !important;
+  box-shadow: 0 0 35px #edca8320 !important;
+}
+@keyframes honor-arrival {
+  from {
+    opacity: 0;
+    transform: translateY(15px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.table-identity .identity-badges {
+  display: flex;
+}
+.persona-note .identity-badges {
+  margin: 0 4px;
+}
+.ranking-name .identity-badges {
+  display: flex;
+}
+@media (max-width: 1050px) {
+  .supporter-rank-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 520px) {
+  .supporter-rank-grid {
+    gap: 8px;
+  }
+  .rank-honor {
+    padding: 15px 8px;
+  }
+  .rank-honor strong {
+    font-size: 20px;
+  }
+  .persona-note .identity-badges {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .supporter-arrival {
+    animation: none !important;
+  }
+}
+.supporter-hall > p,
+.supporter-hall > .supporter-rank-grid,
+.supporter-hall > .honor-footnote {
+  margin-left: 22px;
+  margin-right: 22px;
+}
+.supporter-hall > .honor-footnote {
+  margin-bottom: 22px;
+}

@@ -6,6 +6,7 @@ import {
   type RealmChallenge,
 } from '../shared/expansion';
 import { DatabaseSync } from 'node:sqlite';
+import { SUPPORTER_RANKS, type SupporterStatus, type SupporterTier } from '../shared/supporters';
 import { readFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { randomBytes, randomUUID } from 'node:crypto';
@@ -77,7 +78,7 @@ export class World extends EventEmitter {
     this.db.exec('PRAGMA journal_mode=WAL; PRAGMA busy_timeout=3000;');
     this.db.exec(readFileSync(new URL('./schema.sql', import.meta.url), 'utf8'));
     const env = this.get('SELECT * FROM environment WHERE id=1');
-    if (env && (env.mode !== mode || ![1, 2].includes(env.version))) {
+    if (env && (env.mode !== mode || ![1, 2, 3].includes(env.version))) {
       this.db.close();
       throw new Error('Database environment or schema mismatch');
     }
@@ -87,7 +88,8 @@ export class World extends EventEmitter {
     this.atomic(() => {
       this.syncGrowth();
       this.ensureChallenges();
-      this.run('UPDATE environment SET version=2 WHERE id=1');
+      this.seedSupporters();
+      this.run('UPDATE environment SET version=3 WHERE id=1');
     });
   }
   now() {
@@ -402,6 +404,7 @@ export class World extends EventEmitter {
         this.populate(scenario);
         this.syncGrowth();
         this.ensureChallenges();
+        this.seedSupporters();
       });
     } finally {
       this.db.exec('PRAGMA foreign_keys=ON');
@@ -446,6 +449,12 @@ export class World extends EventEmitter {
       contribution: row.contribution,
       wins: row.wins,
       synthetic: !!row.synthetic,
+      supporter: this.supporterFor(row.id),
+      isLord: !!this.get(
+        'SELECT 1 FROM lords WHERE character_id=? AND ends_at>?',
+        row.id,
+        this.now(),
+      ),
       stats: statsFor(
         row.class,
         row.xp,
@@ -455,6 +464,69 @@ export class World extends EventEmitter {
       joinedAt: row.joined_at,
       lastActive: row.last_active,
     };
+  }
+  seedSupporters() {
+    if (this.mode !== 'simulation') return;
+    for (const c of this.all('SELECT id FROM characters')) {
+      const n = Number(c.id.replace('sim-', ''));
+      const tier =
+        n === 1 || n % 20 === 0 ? 3 : n === 2 || n % 8 === 0 ? 2 : n === 3 || n % 3 === 0 ? 1 : 0;
+      this.run(
+        "INSERT OR IGNORE INTO supporter_status VALUES (?,'simulation',?,0,?,'simulation')",
+        c.id,
+        tier,
+        this.now(),
+      );
+    }
+  }
+  supporterFor(id: string): SupporterStatus {
+    const row = this.get('SELECT * FROM supporter_status WHERE character_id=?', id);
+    if (this.mode === 'simulation') {
+      const tier = (row?.tier ?? 0) as SupporterTier;
+      return {
+        tier,
+        title: SUPPORTER_RANKS[tier].title,
+        source: 'simulation',
+        verifiedAt: row?.verified_at ?? null,
+        gifted: !!row?.gifted,
+      };
+    }
+    const fresh =
+      row?.source === 'twitch' &&
+      row.broadcaster_id === this.setting('supporterChannel') &&
+      this.integration().subscriptions &&
+      this.now() - row.verified_at <= 1800000 &&
+      this.now() >= row.verified_at;
+    const tier = fresh ? (row.tier as SupporterTier) : null;
+    return {
+      tier,
+      title: tier === null ? 'Citizen' : SUPPORTER_RANKS[tier].title,
+      source: fresh ? 'twitch' : 'unavailable',
+      verifiedAt: row?.verified_at ?? null,
+      gifted: fresh && !!row.gifted,
+    };
+  }
+  setSimulationSupporter(id: string, tier: SupporterTier) {
+    if (this.mode !== 'simulation')
+      throw new RuleError('Supporter previews are Simulation only.', 'MODE_ISOLATION', 403);
+    if (!Number.isInteger(tier) || tier < 0 || tier > 3)
+      throw new RuleError('Choose a valid supporter tier.');
+    return this.atomic(() => {
+      const c = this.character(id, false);
+      this.run(
+        "INSERT INTO supporter_status VALUES (?,'simulation',?,0,?,'simulation') ON CONFLICT(character_id) DO UPDATE SET tier=excluded.tier,verified_at=excluded.verified_at",
+        id,
+        tier,
+        this.now(),
+      );
+      if (c.supporter?.tier !== tier)
+        this.event(
+          'supporter',
+          `${c.name} · ${SUPPORTER_RANKS[tier].title}`,
+          `Simulated supporter rank preview. ${SUPPORTER_RANKS[tier].banner} is a cosmetic banner; combat and votes remain equal.`,
+          c.kingdom,
+        );
+    });
   }
   listCharacters(search = '', kingdom = '', page = 0) {
     const filter = kingdom && Object.hasOwn(FACTIONS, kingdom) ? kingdom : '';

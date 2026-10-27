@@ -74,6 +74,7 @@ import type {
 import { CLASSES, FACTIONS, ITEMS, SCENARIOS, TACTICS } from '../shared/catalog';
 import { ApiError, mutate, request, setCsrf } from './api';
 import { Crest, Landscape, RealmArtwork, WorldMap } from './WorldMap';
+import { SUPPORTER_RANKS, type SupporterTier } from '../shared/supporters';
 import {
   ago,
   Avatar,
@@ -90,6 +91,7 @@ import {
   PanelTitle,
   Progress,
   StatIcon,
+  SupporterBadge,
   Tag,
   time,
 } from './ui';
@@ -1817,6 +1819,7 @@ function CitizensScreen({ ctx }: { ctx: Context }) {
                         <Avatar character={c} small />
                         <div>
                           <strong>{c.name}</strong>
+                          <SupporterBadge character={c} />
                           <small>{c.synthetic ? 'SIMULATED CITIZEN' : 'TWITCH CITIZEN'}</small>
                         </div>
                       </div>
@@ -1935,6 +1938,7 @@ function CharacterScreen({ ctx }: { ctx: Context }) {
             ? 'VIEWER EXPERIENCE · SIMULATED PERSONA'
             : 'READ-ONLY CHARACTER · USE TWITCH CHAT TO PLAY'}
           <strong>{c.name}</strong>
+          <SupporterBadge character={c} />
         </span>
         <button onClick={() => ctx.go('citizens')}>
           Change citizen
@@ -1957,6 +1961,7 @@ function CharacterScreen({ ctx }: { ctx: Context }) {
           <div className="character-profile-info">
             <FactionTag faction={c.kingdom} />
             <h2>{c.name}</h2>
+            <SupporterBadge character={c} />
             <div className="character-class">
               <ClassIcon name={c.class} />
               <span>{c.class}</span>
@@ -1996,6 +2001,78 @@ function CharacterScreen({ ctx }: { ctx: Context }) {
           </div>
         </Panel>
         <div className="gear-content">
+          <Panel className="supporter-hall">
+            <PanelTitle title="Your place in the realm" eyebrow="SUPPORTER HONORS" />
+            <p>
+              Wear your support with pride. Your title, portrait trim and ceremonial banner reflect
+              your subscription. Lords are elected separately by equal citizen votes.
+            </p>
+            <div className="supporter-rank-grid">
+              {SUPPORTER_RANKS.map((rank, tier) => (
+                <div
+                  key={rank.title}
+                  className={'rank-honor ' + (c.supporter?.tier === tier ? 'current' : '')}
+                  style={{ '--rank': rank.color } as CSSProperties}
+                >
+                  <span className="honor-sigil">
+                    {tier === 3 ? (
+                      <Crown size={25} />
+                    ) : tier === 2 ? (
+                      <Sparkles size={25} />
+                    ) : (
+                      <Shield size={25} />
+                    )}
+                  </span>
+                  <small>{rank.label}</small>
+                  <strong>{rank.title}</strong>
+                  <span>{rank.banner}</span>
+                  <small>{rank.appearance}</small>
+                  {c.supporter?.tier === tier && (
+                    <b>
+                      Your current rank{c.supporter.source === 'simulation' ? ' · simulated' : ''}
+                    </b>
+                  )}
+                  {ctx.s.mode === 'simulation' && (
+                    <Button
+                      disabled={ctx.busy || c.supporter?.tier === tier}
+                      onClick={() =>
+                        ctx.run(
+                          () =>
+                            ctx.action(`characters/${c.id}/supporter`, {
+                              tier: tier as SupporterTier,
+                            }),
+                          rank.title + ' cosmetic preview applied.',
+                        )
+                      }
+                      aria-label={'Preview ' + rank.title + ' rank'}
+                    >
+                      Preview rank
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="honor-footnote">
+              <ShieldCheck size={15} />
+              <span>
+                Recognition only. Equal combat strength, growth health, rewards, elections and
+                challenge eligibility at every tier.
+              </span>
+            </div>
+            {c.supporter?.source === 'unavailable' && (
+              <p className="muted">
+                Subscription status is unverified. The streamer can authorize subscription access
+                and sync in Settings. Citizen remains your community title.
+              </p>
+            )}
+            {c.supporter?.source === 'twitch' && (
+              <p className="muted">
+                Twitch verified {c.supporter.verifiedAt ? time(c.supporter.verifiedAt) : 'recently'}
+                {c.supporter.gifted ? ' · Gift subscription' : ''}. Refreshes every ten minutes
+                while running.
+              </p>
+            )}
+          </Panel>
           <Panel className="equipment-panel">
             <PanelTitle
               title="Ready for the next chapter"
@@ -2768,6 +2845,7 @@ function LeaderboardScreen({ ctx }: { ctx: Context }) {
                 <Avatar character={c} small />
                 <span className="ranking-name">
                   <strong>{c.name}</strong>
+                  <SupporterBadge character={c} />
                   <small>
                     {FACTIONS[c.kingdom].name} · Lv {c.level} {c.class}
                   </small>
@@ -3201,6 +3279,19 @@ function SettingsScreen({ ctx }: { ctx: Context }) {
                 )
               }
             />
+            {ctx.s.mode === 'live' && (
+              <Button
+                disabled={!integration.subscriptions || ctx.busy}
+                onClick={() =>
+                  ctx.run(
+                    () => ctx.action('integration/supporters/sync'),
+                    'Supporter ranks synced from Twitch.',
+                  )
+                }
+              >
+                Sync supporter ranks
+              </Button>
+            )}
             {ctx.s.mode === 'live' && (
               <Button
                 disabled={!integration.subscriptions}

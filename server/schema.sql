@@ -1,4 +1,5 @@
 PRAGMA foreign_keys=ON;
+CREATE TABLE IF NOT EXISTS supporter_status (character_id TEXT PRIMARY KEY REFERENCES characters(id),broadcaster_id TEXT NOT NULL,tier INTEGER NOT NULL CHECK(tier BETWEEN 0 AND 3),gifted INTEGER NOT NULL CHECK(gifted IN(0,1)),verified_at INTEGER NOT NULL,source TEXT NOT NULL CHECK(source IN('simulation','twitch')));
 CREATE TABLE IF NOT EXISTS kingdom_growth (kingdom TEXT PRIMARY KEY REFERENCES kingdoms(id),high_water INTEGER NOT NULL CHECK(high_water>=0));
 CREATE TABLE IF NOT EXISTS challenges (id TEXT PRIMARY KEY,template TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'open',winner_id TEXT,opened_at INTEGER NOT NULL,expires_at INTEGER NOT NULL,completed_at INTEGER);
 CREATE TABLE IF NOT EXISTS challenge_progress (challenge_id TEXT NOT NULL REFERENCES challenges(id),entity_id TEXT NOT NULL,score INTEGER NOT NULL,PRIMARY KEY(challenge_id,entity_id));

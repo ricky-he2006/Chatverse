@@ -4,7 +4,9 @@ Implementation session began October 26, 2026, America/New_York, after the owner
 
 ## Working scope
 
-- Illustrated living atlas, persistent population-driven frontier discoveries, capped fortress-health combat (`chatverse-v2`), and daily realm challenge races. See [WORLD_EXPANSION.md](WORLD_EXPANSION.md) for rules, migration and verification. Updated suite: **35 tests pass**.
+- Cosmetic supporter ranks: Citizen, Knight, Baron, Duke; separate elected Lord badges; portrait accents and honors banners; Simulation previews and optional verified Twitch reconciliation. See [SUPPORTER_RANKS.md](SUPPORTER_RANKS.md). Updated suite: **40 tests**. Live subscription verification remains mocked pending a consenting broadcaster grant.
+
+- Illustrated living atlas, persistent population-driven frontier discoveries, capped fortress-health combat (`chatverse-v2`), and daily realm challenge races. See [WORLD_EXPANSION.md](WORLD_EXPANSION.md) for rules, migration and verification. Updated suite: **40 tests pass**.
 
 - React/TypeScript frontend with Overview, world map, kingdom/council, paginated citizens, character/gear/shop, chapters/ballots/replay, rankings/archive, chronicle, Steward and settings.
 - Authenticated local Fastify backend, schema validation, CSRF/origin/Host checks, bounded requests and mode-specific SSE invalidation.
@@ -20,7 +22,7 @@ Implementation session began October 26, 2026, America/New_York, after the owner
 
 ## Verification performed
 
-Final TypeScript check and Vite production build pass. **All 35 automated tests pass**, including Windows DPAPI encryption, the installation writer lock and non-canonical-path authentication regressions. Tests cover numerical boundaries, deterministic RNG/rosters/replay, equipment spending, duplicate receipts/rewards, deadline and pause/resume behavior, electorate/quorum, seasonal archive, file-backed restart/mode mismatch, HTTP auth/CSRF/origin, overlay isolation/revocation, OAuth state, actual command parser and unsafe model fallback. The battle golden fixture was reviewed against its six explicit rolls (scores 656/607), not blindly updated.
+Final TypeScript check and Vite production build pass. **All 40 automated tests pass**, including Windows DPAPI encryption, the installation writer lock and non-canonical-path authentication regressions. Tests cover numerical boundaries, deterministic RNG/rosters/replay, equipment spending, duplicate receipts/rewards, deadline and pause/resume behavior, electorate/quorum, seasonal archive, file-backed restart/mode mismatch, HTTP auth/CSRF/origin, overlay isolation/revocation, OAuth state, actual command parser and unsafe model fallback. The battle golden fixture was reviewed against its six explicit rolls (scores 656/607), not blindly updated.
 
 Browser QA on the running production build: unlocked dashboard; launched a real backend Simulation chapter; pledged, changed tactic, rallied synthetic citizens and advanced the scheduler; observed a recorded result and rounds; upgraded a charm, observing its level, health and gold change together; visited main screen routes; inspected the 360-pixel character layout and measured no document horizontal overflow. A short-window sidebar issue was found and fixed. Overlay capability setup and a separate overlay browser tab load were exercised. Native OBS/game-footage composition is not yet tested.
 

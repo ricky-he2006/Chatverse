@@ -5,6 +5,7 @@ import { ITEMS } from '../shared/catalog';
 import { RuleError } from './engine';
 import { disconnected, World } from './world';
 import { TokenVault } from './vault';
+import { twitchTier, type SupporterTier } from '../shared/supporters';
 
 type Grant = {
   access_token: string;
@@ -38,6 +39,15 @@ export class TwitchIntegration {
   private sending = false;
   private queue: { body: string; expires: number; outboxId?: number }[] = [];
   private replyTimer: ReturnType<typeof setInterval>;
+  private supporterTimer: ReturnType<typeof setInterval>;
+  private supporterSync: Promise<{ updated: number; verifiedAt: number }> | null = null;
+  private closed = false;
+  private supporterAttempt = 0;
+  private queueSupporterSync() {
+    if (Date.now() - this.supporterAttempt < 60000) return;
+    this.supporterAttempt = Date.now();
+    void this.syncSupporters().catch(() => {});
+  }
   constructor(
     private world: World,
     private vault: TokenVault,
@@ -46,6 +56,8 @@ export class TwitchIntegration {
     world.integration = () => ({ ...this.status });
     this.replyTimer = setInterval(() => void this.flush().catch(() => {}), 3000);
     this.replyTimer.unref();
+    this.supporterTimer = setInterval(() => this.queueSupporterSync(), 600000);
+    this.supporterTimer.unref();
   }
   private update(patch: Partial<IntegrationStatus>) {
     Object.assign(this.status, patch);
@@ -154,6 +166,7 @@ export class TwitchIntegration {
     this.vault.write(this.grant);
     this.world.atomic(() => {
       this.world.set('realm', `${identity.login}’s Realm`);
+      this.world.set('supporterChannel', identity.user_id);
       this.world.event(
         'integration',
         'A real channel, connected',
@@ -188,6 +201,7 @@ export class TwitchIntegration {
     )
       throw new RuleError('Twitch identity or scope mismatch.', 'REAUTH_REQUIRED', 401);
     this.grant!.scopes = data.scopes;
+    this.world.set('supporterChannel', this.grant!.userId);
     this.update({
       channel: this.grant!.login,
       scopes: data.scopes,
@@ -240,6 +254,14 @@ export class TwitchIntegration {
     if (response.status === 401 && retry) {
       await this.refresh();
       return this.helix(path, options, false);
+    }
+    if (response.status === 403 && path.startsWith('subscriptions?')) {
+      this.update({ subscriptions: false });
+      throw new RuleError(
+        'Subscription access is unavailable. Reauthorize the broadcaster with the optional subscription scope.',
+        'MISSING_SCOPE',
+        403,
+      );
     }
     if (response.status === 429)
       throw new RuleError(
@@ -300,6 +322,7 @@ export class TwitchIntegration {
             });
           }
           this.reconnectAttempt = 0;
+          this.queueSupporterSync();
         } else if (frame.metadata?.message_type === 'session_reconnect') {
           const next = new URL(frame.payload.session.reconnect_url);
           if (next.protocol !== 'wss:' || next.hostname !== 'eventsub.wss.twitch.tv')
@@ -394,13 +417,14 @@ export class TwitchIntegration {
     };
     let message = '';
     try {
-      if (mutating.includes(verb))
+      if (mutating.includes(verb)) {
         message = this.world.command(
           actor,
           { type: verb as Command['type'], argument: parts.join(' ') },
           key,
         ).message;
-      else {
+        if (verb === 'join' && this.status.subscriptions) this.queueSupporterSync();
+      } else {
         const c = this.world.get(
           'SELECT c.id FROM characters c JOIN users u ON u.id=c.user_id WHERE u.subject=?',
           actor.subject,
@@ -536,6 +560,8 @@ export class TwitchIntegration {
     this.wantConnection = false;
     this.socket?.close();
     this.update({
+      subscriptions: false,
+      replies: false,
       connected: false,
       state: 'Reauthorize required',
       error: 'Authorization was revoked or could not be renewed. Reconnect Twitch.',
@@ -557,7 +583,91 @@ export class TwitchIntegration {
     const data = await this.helix(`subscriptions?broadcaster_id=${this.grant.userId}&first=1`);
     return { total: data.total ?? null, verifiedAt: Date.now(), cosmeticOnly: true };
   }
+  async syncSupporters(): Promise<{ updated: number; verifiedAt: number }> {
+    if (this.supporterSync) return this.supporterSync;
+    if (!this.grant?.scopes.includes('channel:read:subscriptions') || !this.status.subscriptions)
+      throw new RuleError(
+        'Authorize optional channel:read:subscriptions to sync supporter ranks.',
+        'MISSING_SCOPE',
+        403,
+      );
+    const grant = this.grant;
+    const work = async () => {
+      const citizens = this.world.all(
+        "SELECT c.id,u.subject FROM characters c JOIN users u ON u.id=c.user_id WHERE u.subject LIKE 'twitch:%' ORDER BY c.id",
+      );
+      const updates: { id: string; tier: SupporterTier; gifted: boolean }[] = [];
+      const startedAt = this.world.now();
+      for (let offset = 0; offset < citizens.length; offset += 100) {
+        if (this.closed || this.grant !== grant)
+          throw new Error('Supporter sync cancelled after authorization changed.');
+        const batch = citizens.slice(offset, offset + 100);
+        const params = new URLSearchParams({ broadcaster_id: grant.userId, first: '100' });
+        for (const c of batch) params.append('user_id', c.subject.slice(7));
+        const data = await this.helix('subscriptions?' + params);
+        if (!Array.isArray(data.data) || data.pagination?.cursor)
+          throw new Error('Incomplete supporter response; previous ranks retained.');
+        const found = new Map<string, { tier: SupporterTier; gifted: boolean }>();
+        for (const row of data.data) {
+          if (
+            row.broadcaster_id !== grant.userId ||
+            !batch.some((c) => c.subject === 'twitch:' + row.user_id) ||
+            found.has(row.user_id) ||
+            typeof row.is_gift !== 'boolean'
+          )
+            throw new Error('Invalid supporter identity in Twitch response.');
+          found.set(row.user_id, { tier: twitchTier(row.tier), gifted: row.is_gift });
+        }
+        for (const c of batch) {
+          const sub = found.get(c.subject.slice(7));
+          updates.push({ id: c.id, tier: sub?.tier ?? 0, gifted: sub?.gifted ?? false });
+        }
+      }
+      if (this.closed || this.grant !== grant || !this.status.subscriptions)
+        throw new Error('Supporter sync cancelled after authorization changed.');
+      this.world.atomic(() => {
+        this.world.set('supporterChannel', grant.userId);
+        for (const row of updates) {
+          const prior = this.world.get(
+            'SELECT * FROM supporter_status WHERE character_id=?',
+            row.id,
+          );
+          this.world.run(
+            "INSERT INTO supporter_status VALUES (?,?,?,?,?,'twitch') ON CONFLICT(character_id) DO UPDATE SET broadcaster_id=excluded.broadcaster_id,tier=excluded.tier,gifted=excluded.gifted,verified_at=excluded.verified_at,source='twitch'",
+            row.id,
+            grant.userId,
+            row.tier,
+            row.gifted ? 1 : 0,
+            startedAt,
+          );
+          if (
+            row.tier > 0 &&
+            (!prior || prior.broadcaster_id !== grant.userId || prior.tier !== row.tier)
+          ) {
+            const c = this.world.character(row.id, false);
+            this.world.event(
+              'supporter',
+              `${c.name} · ${c.supporter!.title}`,
+              `A verified supporter wears a new ceremonial banner. Recognition is cosmetic; combat and votes remain equal.`,
+              c.kingdom,
+              'twitch',
+            );
+          }
+        }
+        this.world.set('supporterSyncedAt', startedAt);
+      });
+      return { updated: updates.length, verifiedAt: startedAt };
+    };
+    this.supporterSync = work();
+    try {
+      return await this.supporterSync;
+    } finally {
+      this.supporterSync = null;
+    }
+  }
   close() {
+    this.closed = true;
+    clearInterval(this.supporterTimer);
     this.wantConnection = false;
     this.socket?.close();
     if (this.timer) clearTimeout(this.timer);

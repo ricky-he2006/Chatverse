@@ -161,7 +161,7 @@ export function Overlay() {
         </div>
       )}
       {notice && data && !data.quiet && (
-        <div className="obs-notice">
+        <div className={'obs-notice ' + (notice.type === 'supporter' ? 'supporter-arrival' : '')}>
           <div>
             <Crown size={29} />
           </div>

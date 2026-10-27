@@ -529,6 +529,21 @@ export async function createApp(
     return { ok: true };
   });
   app.get('/api/live/integration/subscribers', async () => integration?.subscribers());
+  app.post('/api/live/integration/supporters/sync', async () => {
+    if (!integration) throw new RuleError('Twitch integration is unavailable.');
+    return integration.syncSupporters();
+  });
+  app.post('/api/simulation/characters/:id/supporter', async (req) => {
+    const { tier } = z
+      .object({ tier: z.number().int().min(0).max(3) })
+      .strict()
+      .parse(req.body);
+    worlds.simulation.setSimulationSupporter(
+      (req.params as { id: string }).id,
+      tier as 0 | 1 | 2 | 3,
+    );
+    return { ok: true };
+  });
   app.post('/api/:mode/backup', async (req) => {
     const w = worldFor(req);
     if (w.filename === ':memory:') return { ok: false };

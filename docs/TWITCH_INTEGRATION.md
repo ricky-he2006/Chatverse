@@ -78,3 +78,6 @@ Test OBS alpha output over actual game footage; scope widgets to safe corners, n
 No planned Twitch event provides arbitrary Valorant/Fortnite kills, round wins or match telemetry. The architecture therefore uses streamer-confirmed “victory/defeat/milestone” signals with actor and provenance labels; a separate game-specific approved integration would require fresh research. Never infer gameplay outcomes from category, chat claims or AI.
 
 M1 must prove real callback, scope validation, real chat event → canonical command → DB row → browser update, then token refresh/reconnect and dedupe. Use Twitch CLI's mock WebSocket server for failure fixtures ([CLI](https://dev.twitch.tv/docs/cli/websocket-event-command/)); mock evidence is labeled Simulation/testing and cannot satisfy the real-integration gate. Subscription proof is optional and separately marked. Hackathon submission requirements were researched separately and are recorded in HACKATHON_DEMO.
+## Implemented supporter recognition
+
+Individual subscription-tier cosmetics now use joined-citizen lookups, ten-minute reconciliation and a manual sync action. The shipped adapter does not subscribe to subscription-change EventSub topics; changes appear after reconciliation. See [SUPPORTER_RANKS.md](SUPPORTER_RANKS.md) for scope setup, caching, identity validation and verified versus simulated status.

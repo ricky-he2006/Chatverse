@@ -12,6 +12,47 @@ import {
 } from 'lucide-react';
 import { FACTIONS } from '../shared/catalog';
 import type { Character, Faction } from '../shared/types';
+import { SUPPORTER_RANKS } from '../shared/supporters';
+export function SupporterBadge({
+  character,
+}: {
+  character: Pick<Character, 'supporter' | 'isLord'>;
+}) {
+  const status = character.supporter;
+  const rank = SUPPORTER_RANKS[status?.tier ?? 0];
+  return (
+    <span className="identity-badges">
+      <span
+        className={'supporter-badge tier-' + (status?.tier ?? 0)}
+        style={{ '--rank': rank.color } as CSSProperties}
+        title={
+          status?.source === 'simulation'
+            ? 'Simulated subscription rank — cosmetic only'
+            : status?.source === 'twitch'
+              ? 'Twitch verified — cosmetic only'
+              : 'Subscription status unverified'
+        }
+      >
+        {status?.tier === 3 ? (
+          <Crown size={11} />
+        ) : status?.tier === 2 ? (
+          <Sparkles size={11} />
+        ) : (
+          <Shield size={11} />
+        )}
+        {rank.title}
+        {status?.source === 'simulation' && <small>SIM</small>}
+        {status?.source === 'unavailable' && <small>UNVERIFIED</small>}
+      </span>
+      {character.isLord && (
+        <span className="elected-badge">
+          <Crown size={11} />
+          Elected Lord
+        </span>
+      )}
+    </span>
+  );
+}
 export function Button({
   children,
   variant = 'secondary',
@@ -77,13 +118,14 @@ export function Avatar({
   character,
   small = false,
 }: {
-  character: Pick<Character, 'name' | 'class' | 'kingdom'>;
+  character: Pick<Character, 'name' | 'class' | 'kingdom' | 'supporter'>;
   small?: boolean;
 }) {
-  const color = FACTIONS[character.kingdom].color;
+  const tier = character.supporter?.tier ?? 0;
+  const color = tier ? SUPPORTER_RANKS[tier].color : FACTIONS[character.kingdom].color;
   return (
     <div
-      className={`avatar ${small ? 'small' : ''} ${character.class}`}
+      className={`avatar ${small ? 'small' : ''} ${character.class} supporter-frame-${tier}`}
       style={{ '--faction': color } as CSSProperties}
       aria-hidden="true"
     >

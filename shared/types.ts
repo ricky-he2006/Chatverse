@@ -21,6 +21,8 @@ export type Gear = {
   icon: string;
 };
 export type Character = {
+  supporter?: import('./supporters').SupporterStatus;
+  isLord?: boolean;
   id: string;
   name: string;
   kingdom: Faction;
