@@ -86,3 +86,6 @@ Document test hardware, OS, runtime, driver/SQLite versions and dataset hash. Se
 - Transparent overlay is visually verified in OBS, shared visual system and accessibility checks pass.
 - No critical permission, token, mode-contamination, settlement or data-loss defects; lesser known issues documented honestly.
 - Official submission conditions, asset rights and deadline are checked; demo claims match actual shipped tier.
+## October 27 audit verification
+
+The implemented suite now contains 56 tests. [AUDIT.md](AUDIT.md) records scope, fixes, browser checks, backup verification and benchmark results. `tests/audit.test.ts` includes actual loopback SSE connections; restricted sandboxes need local networking permission for those tests. Twitch/AI calls remain mocked. Passing this suite does not replace a real broadcaster authorization, EventSub reconnect and native OBS preflight.

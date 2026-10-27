@@ -32,8 +32,11 @@ const commandSchema = z
   })
   .strict();
 const digest = (s: string) => createHash('sha256').update(s).digest('hex');
-const equal = (a: string, b: string) =>
-  a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
+const equal = (a: string, b: string) => {
+  const first = Buffer.from(a),
+    second = Buffer.from(b);
+  return first.length === second.length && timingSafeEqual(first, second);
+};
 export async function createApp(
   worlds: Record<Mode, World>,
   integration?: TwitchIntegration,
@@ -100,12 +103,11 @@ export async function createApp(
     } else limits.set(key, { at: now, count: 1 });
     if (limits.size > 5000)
       for (const [key, v] of limits) if (now - v.at > 60000) limits.delete(key);
-    if (
-      req.url.startsWith('/api/') &&
-      !req.url.startsWith('/api/health') &&
-      !req.url.startsWith('/api/session') &&
-      !req.url.startsWith('/api/overlay/exchange')
-    ) {
+    const publicApi =
+      (rawPath === '/api/health' && ['GET', 'HEAD'].includes(req.method)) ||
+      (rawPath === '/api/session' && ['GET', 'HEAD', 'POST'].includes(req.method)) ||
+      (rawPath === '/api/overlay/exchange' && req.method === 'POST');
+    if (req.url.startsWith('/api/') && !publicApi) {
       const overlayRoute = /^\/api\/(live|simulation)\/overlay\/(snapshot|events)(\?|$)/.test(
         req.url,
       );
@@ -150,14 +152,37 @@ export async function createApp(
       return reply
         .code(error.status)
         .send({ code: error.code, message: error.message, requestId: req.id });
+    const status = error instanceof Error && 'statusCode' in error ? error.statusCode : undefined;
+    if (typeof status === 'number' && status >= 400 && status < 500)
+      return reply
+        .code(status)
+        .send({
+          code: 'INVALID_REQUEST',
+          message:
+            status === 413 ? 'Request body is too large.' : 'The request could not be parsed.',
+          requestId: req.id,
+        });
     console.error(`[${req.id}]`, error instanceof Error ? error.message : 'Unexpected failure');
     return reply.code(500).send({
       code: 'INTERNAL_ERROR',
-      message: 'The operation failed. No partial game state was saved.',
+      message: 'The operation failed. Reload the current state before retrying.',
       requestId: req.id,
     });
   });
   const worldFor = (req: any) => worlds[z.enum(['simulation', 'live']).parse(req.params.mode)];
+  const streamAuthorized = (req: any, mode: Mode, overlay = false) => {
+    const id =
+      (overlay ? req.cookies[`cv_overlay_${mode}`] : undefined) ?? req.cookies.cv_session ?? '';
+    const session = sessions.get(id);
+    return () =>
+      !!session &&
+      sessions.get(id) === session &&
+      session.expires > Date.now() &&
+      (session.kind === 'admin' ||
+        (overlay &&
+          session.mode === mode &&
+          !!worlds[mode].get('SELECT 1 FROM overlay_keys WHERE hash=?', session.csrf)));
+  };
   app.get('/api/health', async () => ({
     ok: true,
     version: '0.1.0',
@@ -172,8 +197,9 @@ export async function createApp(
   });
   app.post('/api/session', async (req, reply) => {
     const { code } = z.object({ code: z.string().min(1).max(100) }).parse(req.body);
-    const key = `bootstrap:${req.ip}`,
-      attempt = limits.get(key);
+    const key = `bootstrap:${req.ip}`;
+    const previous = limits.get(key);
+    const attempt = previous && Date.now() - previous.at < 600000 ? previous : undefined;
     if (attempt && attempt.count >= 10 && Date.now() - attempt.at < 600000)
       throw new RuleError('Too many unlock attempts. Wait ten minutes.', 'RATE_LIMIT', 429);
     if (!equal(code, bootstrap)) {
@@ -184,6 +210,8 @@ export async function createApp(
         401,
       );
     }
+    limits.delete(key);
+    for (const [id, session] of sessions) if (session.expires <= Date.now()) sessions.delete(id);
     const id = randomBytes(32).toString('base64url'),
       csrf = randomBytes(24).toString('hex');
     sessions.set(id, { kind: 'admin', csrf, expires: Date.now() + 12 * 3600000 });
@@ -227,9 +255,12 @@ export async function createApp(
   app.get('/api/:mode/seasons', async (req) => {
     const w = worldFor(req);
     return {
-      seasons: w.all('SELECT * FROM seasons ORDER BY number DESC'),
+      seasons: w.all('SELECT * FROM seasons ORDER BY number DESC LIMIT 12'),
       awards: w.all(
-        'SELECT a.*,s.number FROM season_awards a JOIN seasons s ON s.id=a.season_id ORDER BY s.number DESC,a.rank LIMIT 100',
+        `SELECT a.*,s.number FROM (
+          SELECT awards.*,ROW_NUMBER() OVER(PARTITION BY season_id,kind ORDER BY rank,subject) position
+          FROM season_awards awards WHERE season_id IN (SELECT id FROM seasons ORDER BY number DESC LIMIT 12)
+        ) a JOIN seasons s ON s.id=a.season_id WHERE position<=3 ORDER BY s.number DESC,a.kind,a.rank,a.subject`,
       ),
     };
   });
@@ -382,6 +413,7 @@ export async function createApp(
   app.get('/api/:mode/events', async (req, reply) => {
     const w = worldFor(req),
       release = reserveStream(w.mode);
+    const authorized = streamAuthorized(req, w.mode);
     reply.hijack();
     reply.raw.writeHead(200, {
       'Content-Type': 'text/event-stream',
@@ -392,6 +424,10 @@ export async function createApp(
     let serial = Date.now(),
       blocked = false;
     const send = () => {
+      if (!authorized()) {
+        reply.raw.end();
+        return;
+      }
       if (blocked || reply.raw.destroyed) return;
       blocked = !reply.raw.write(
         `id: ${++serial}\nevent: invalidate\ndata: ${JSON.stringify({ generation: w.get('SELECT generation FROM environment WHERE id=1')!.generation })}\n\n`,
@@ -404,10 +440,11 @@ export async function createApp(
     send();
     w.on('change', send);
     const beat = setInterval(() => {
-      if (!reply.raw.destroyed) reply.raw.write(': heartbeat\n\n');
+      if (!authorized()) reply.raw.end();
+      else if (!reply.raw.destroyed && !blocked) reply.raw.write(': heartbeat\n\n');
     }, 15000);
     beat.unref();
-    req.raw.on('close', () => {
+    reply.raw.on('close', () => {
       release();
       w.off('change', send);
       clearInterval(beat);
@@ -424,7 +461,7 @@ export async function createApp(
   });
   app.delete('/api/:mode/overlay/keys', async (req) => {
     const w = worldFor(req);
-    w.run('DELETE FROM overlay_keys');
+    w.atomic(() => w.run('DELETE FROM overlay_keys'));
     for (const [id, s] of sessions)
       if (s.kind === 'overlay' && s.mode === w.mode) sessions.delete(id);
     return { ok: true };
@@ -475,7 +512,7 @@ export async function createApp(
   );
   app.get('/api/:mode/overlay/events', async (req, reply) => {
     const w = worldFor(req),
-      session = sessions.get(req.cookies[`cv_overlay_${w.mode}`] ?? req.cookies.cv_session ?? '');
+      authorized = streamAuthorized(req, w.mode, true);
     const release = reserveStream(w.mode);
     reply.hijack();
     reply.raw.writeHead(200, {
@@ -483,22 +520,25 @@ export async function createApp(
       'Cache-Control': 'no-cache',
       Connection: 'keep-alive',
     });
+    let blocked = false;
     const send = () => {
       if (reply.raw.destroyed) return;
-      if (
-        session?.kind === 'overlay' &&
-        !w.get('SELECT 1 FROM overlay_keys WHERE hash=?', session.csrf)
-      ) {
+      if (!authorized()) {
         reply.raw.end();
         return;
       }
-      reply.raw.write(`data: ${JSON.stringify(overlaySnapshot(w.mode))}\n\n`);
+      if (blocked) return;
+      blocked = !reply.raw.write(`data: ${JSON.stringify(overlaySnapshot(w.mode))}\n\n`);
     };
+    reply.raw.on('drain', () => {
+      blocked = false;
+      send();
+    });
     send();
     w.on('change', send);
     const beat = setInterval(send, 15000);
     beat.unref();
-    req.raw.on('close', () => {
+    reply.raw.on('close', () => {
       release();
       clearInterval(beat);
       w.off('change', send);

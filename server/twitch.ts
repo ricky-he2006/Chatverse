@@ -42,6 +42,7 @@ export class TwitchIntegration {
   private supporterTimer: ReturnType<typeof setInterval>;
   private supporterSync: Promise<{ updated: number; verifiedAt: number }> | null = null;
   private closed = false;
+  private authorizationEpoch = 0;
   private supporterAttempt = 0;
   private queueSupporterSync() {
     if (Date.now() - this.supporterAttempt < 60000) return;
@@ -61,28 +62,35 @@ export class TwitchIntegration {
   }
   private update(patch: Partial<IntegrationStatus>) {
     Object.assign(this.status, patch);
-    this.world.emit('change');
+    this.world.notifyChange();
   }
   async initialize() {
     if (!this.status.configured) return;
+    const epoch = this.authorizationEpoch;
+    if (!this.validationTimer) {
+      this.validationTimer = setInterval(() => {
+        const currentEpoch = this.authorizationEpoch;
+        void this.validate().catch(() => {
+          if (!this.closed && currentEpoch === this.authorizationEpoch) this.authorizationLost();
+        });
+      }, 3600000);
+      this.validationTimer.unref();
+    }
     try {
       this.grant = this.vault.read<Grant>();
       if (this.grant) {
         await this.validate();
+        if (this.closed || this.authorizationEpoch !== epoch) return;
         this.wantConnection = true;
         this.connect();
       }
     } catch (error) {
+      if (this.closed || this.authorizationEpoch !== epoch) return;
       this.update({
         error: error instanceof Error ? error.message : 'Twitch reconnect required',
         state: 'Reconnect required',
       });
     }
-    this.validationTimer = setInterval(
-      () => void this.validate().catch(() => this.authorizationLost()),
-      3600000,
-    );
-    this.validationTimer.unref();
   }
   authorize(session: string) {
     if (!this.status.configured)
@@ -109,6 +117,7 @@ export class TwitchIntegration {
     return process.env.TWITCH_REDIRECT_URI ?? 'http://localhost:3000/auth/twitch/callback';
   }
   async callback(state: string, code: string, session: string) {
+    const epoch = this.authorizationEpoch;
     const pending = this.states.get(state);
     this.states.delete(state);
     if (!pending || pending.expires < Date.now() || pending.session !== session)
@@ -141,6 +150,12 @@ export class TwitchIntegration {
     });
     if (!validation.ok) throw new RuleError('Twitch token validation failed.', 'OAUTH_FAILED', 401);
     const identity = (await validation.json()) as any;
+    if (this.closed || this.authorizationEpoch !== epoch)
+      throw new RuleError(
+        'This authorization flow was cancelled. Connect Twitch again.',
+        'OAUTH_STATE',
+        400,
+      );
     if (
       identity.client_id !== process.env.TWITCH_CLIENT_ID ||
       !scopes().every((s) => identity.scopes?.includes(s))
@@ -180,12 +195,18 @@ export class TwitchIntegration {
   }
   private async validate() {
     if (!this.grant) return;
+    const grant = this.grant,
+      epoch = this.authorizationEpoch;
+    const current = () =>
+      !this.closed && this.authorizationEpoch === epoch && this.grant?.userId === grant.userId;
     let response = await fetch('https://id.twitch.tv/oauth2/validate', {
       headers: { Authorization: `OAuth ${this.grant.access_token}` },
       signal: AbortSignal.timeout(10000),
     });
+    if (!current()) return;
     if (response.status === 401) {
       await this.refresh();
+      if (!current()) return;
       response = await fetch('https://id.twitch.tv/oauth2/validate', {
         headers: { Authorization: `OAuth ${this.grant!.access_token}` },
         signal: AbortSignal.timeout(10000),
@@ -194,6 +215,7 @@ export class TwitchIntegration {
     if (!response.ok)
       throw new RuleError('Twitch authorization is no longer valid.', 'REAUTH_REQUIRED', 401);
     const data = (await response.json()) as any;
+    if (!current()) return;
     if (
       data.user_id !== this.grant!.userId ||
       data.client_id !== process.env.TWITCH_CLIENT_ID ||
@@ -213,6 +235,7 @@ export class TwitchIntegration {
     if (this.refreshPromise) return this.refreshPromise;
     this.refreshPromise = (async () => {
       if (!this.grant) throw new Error('No Twitch grant');
+      const grant = this.grant;
       const response = await fetch('https://id.twitch.tv/oauth2/token', {
         method: 'POST',
         body: new URLSearchParams({
@@ -223,11 +246,23 @@ export class TwitchIntegration {
         }),
         signal: AbortSignal.timeout(10000),
       });
+      if (this.closed || this.grant !== grant)
+        throw new RuleError(
+          'Authorization changed while refreshing. Connect Twitch again.',
+          'REAUTH_REQUIRED',
+          401,
+        );
       if (!response.ok) {
         this.authorizationLost();
         throw new RuleError('Reconnect Twitch to renew authorization.', 'REAUTH_REQUIRED', 401);
       }
       const next = (await response.json()) as any;
+      if (this.closed || this.grant !== grant)
+        throw new RuleError(
+          'Authorization changed while refreshing. Connect Twitch again.',
+          'REAUTH_REQUIRED',
+          401,
+        );
       this.grant = {
         ...this.grant,
         access_token: next.access_token,
@@ -496,8 +531,9 @@ export class TwitchIntegration {
     this.enqueue(`@${safeName(event.chatter_user_login ?? actor.name)} ${message}`);
   }
   enqueue(body: string, outboxId?: number) {
-    if (this.queue.length >= 50) return;
+    if (this.queue.length >= 50) return false;
     this.queue.push({ body: body.slice(0, 480), expires: Date.now() + 15000, outboxId });
+    return true;
   }
   private async flush() {
     if (
@@ -508,12 +544,16 @@ export class TwitchIntegration {
       this.world.settings().quiet
     )
       return;
+    this.world.run(
+      "UPDATE outbox SET status='expired' WHERE status='pending' AND created_at<?",
+      this.world.now() - 15000,
+    );
     const pending = this.world.all(
       "SELECT * FROM outbox WHERE status='pending' ORDER BY id LIMIT 3",
     );
     for (const row of pending) {
+      if (!this.enqueue(row.body, row.id)) break;
       this.world.run("UPDATE outbox SET status='queued' WHERE id=?", row.id);
-      this.enqueue(row.body, row.id);
     }
     const cutoff = Date.now() - 30000;
     this.sends = this.sends.filter((t) => t > cutoff);
@@ -557,6 +597,8 @@ export class TwitchIntegration {
     }
   }
   private authorizationLost() {
+    this.authorizationEpoch++;
+    this.states.clear();
     this.wantConnection = false;
     this.socket?.close();
     this.update({
@@ -569,13 +611,19 @@ export class TwitchIntegration {
     this.world.emit('authorizationLost');
   }
   disconnect() {
+    this.authorizationEpoch++;
+    this.states.clear();
     this.wantConnection = false;
     if (this.timer) clearTimeout(this.timer);
     this.socket?.close();
     this.queue = [];
     this.grant = null;
-    this.vault.write(null);
     this.update({ ...disconnected, configured: this.status.configured, state: 'Disconnected' });
+    this.world.atomic(() => {
+      this.world.run("UPDATE outbox SET status='expired' WHERE status='pending'");
+      this.world.run("UPDATE outbox SET status='unknown' WHERE status='queued'");
+    });
+    this.vault.write(null);
   }
   async subscribers() {
     if (!this.grant || !this.status.subscriptions)
@@ -592,6 +640,9 @@ export class TwitchIntegration {
         403,
       );
     const grant = this.grant;
+    const epoch = this.authorizationEpoch;
+    const current = () =>
+      !this.closed && this.authorizationEpoch === epoch && this.grant?.userId === grant.userId;
     const work = async () => {
       const citizens = this.world.all(
         "SELECT c.id,u.subject FROM characters c JOIN users u ON u.id=c.user_id WHERE u.subject LIKE 'twitch:%' ORDER BY c.id",
@@ -599,8 +650,7 @@ export class TwitchIntegration {
       const updates: { id: string; tier: SupporterTier; gifted: boolean }[] = [];
       const startedAt = this.world.now();
       for (let offset = 0; offset < citizens.length; offset += 100) {
-        if (this.closed || this.grant !== grant)
-          throw new Error('Supporter sync cancelled after authorization changed.');
+        if (!current()) throw new Error('Supporter sync cancelled after authorization changed.');
         const batch = citizens.slice(offset, offset + 100);
         const params = new URLSearchParams({ broadcaster_id: grant.userId, first: '100' });
         for (const c of batch) params.append('user_id', c.subject.slice(7));
@@ -623,7 +673,7 @@ export class TwitchIntegration {
           updates.push({ id: c.id, tier: sub?.tier ?? 0, gifted: sub?.gifted ?? false });
         }
       }
-      if (this.closed || this.grant !== grant || !this.status.subscriptions)
+      if (!current() || !this.status.subscriptions)
         throw new Error('Supporter sync cancelled after authorization changed.');
       this.world.atomic(() => {
         this.world.set('supporterChannel', grant.userId);
@@ -666,6 +716,7 @@ export class TwitchIntegration {
     }
   }
   close() {
+    this.authorizationEpoch++;
     this.closed = true;
     clearInterval(this.supporterTimer);
     this.wantConnection = false;

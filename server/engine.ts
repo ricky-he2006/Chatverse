@@ -69,6 +69,24 @@ export function effectivePower(roster: { power: number }[]) {
   );
 }
 export function resolveBattle(input: BattleInput): BattleResult {
+  if (
+    !Number.isSafeInteger(input.seed) ||
+    input.seed < 0 ||
+    input.seed > 0xffffffff ||
+    input.sides.length !== 2 ||
+    input.attacker === input.defender ||
+    !['north', 'east', 'west'].includes(input.attacker) ||
+    !['north', 'east', 'west'].includes(input.defender) ||
+    input.sides.some(
+      (side, i) =>
+        side.kingdom !== (i === 0 ? input.attacker : input.defender) ||
+        !['attack', 'defend', 'raid'].includes(side.tactic) ||
+        !Number.isSafeInteger(side.effective) ||
+        side.effective < 1 ||
+        side.effective > 110000,
+    )
+  )
+    throw new Error('Invalid battle inputs');
   if (input.ruleset !== 'chatverse-v2') return resolveLegacyBattle(input);
   const [a, b] = input.sides;
   for (const side of input.sides) {

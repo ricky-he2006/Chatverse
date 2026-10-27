@@ -203,17 +203,19 @@ export function App() {
     localStorage.setItem(`cv:${activeMode.current}:persona`, id);
     setPersonaValue(id);
   }, []);
+  const loadVersion = useRef(0);
   const load = useCallback(async () => {
     const requestedMode = mode;
+    const requestVersion = ++loadVersion.current;
     try {
       const data = await request<WorldSnapshot>(
         `/api/${mode}/snapshot?persona=${encodeURIComponent(persona)}`,
       );
-      if (activeMode.current !== requestedMode) return;
+      if (activeMode.current !== requestedMode || requestVersion !== loadVersion.current) return;
       setSnapshot(data);
       setError('');
     } catch (err) {
-      if (activeMode.current === requestedMode) {
+      if (activeMode.current === requestedMode && requestVersion === loadVersion.current) {
         setError((err as Error).message);
         if (err instanceof ApiError && err.status === 401) setUnlocked(false);
       }
@@ -320,7 +322,7 @@ export function App() {
   useEffect(() => {
     receivedAt.current = Date.now();
   }, [snapshot]);
-  const serverNow = snapshot ? snapshot.now + (tick - receivedAt.current) : now;
+  const serverNow = snapshot ? snapshot.now + Math.max(0, tick - receivedAt.current) : now;
   if (unlocked === null)
     return (
       <div className="loading-screen">
@@ -425,9 +427,10 @@ export function App() {
           onClick={() => setMobileNav(false)}
         />
       )}
-      <aside className="sidebar">
+      <aside className="sidebar" id="primary-navigation">
         <a
           className="brand"
+          aria-label="ChatVerse overview"
           href="/?screen=overview"
           onClick={(e) => {
             e.preventDefault();
@@ -460,6 +463,8 @@ export function App() {
             <div key={n.id}>
               {i === 8 && <div className="nav-label manage-label">WORLD MANAGEMENT</div>}
               <button
+                aria-label={n.label}
+                title={n.label}
                 className={screen === n.id ? 'active' : ''}
                 onClick={() => go(n.id)}
                 aria-current={screen === n.id ? 'page' : undefined}
@@ -503,6 +508,8 @@ export function App() {
             <button
               className="mobile-menu"
               aria-label="Open navigation"
+              aria-expanded={mobileNav}
+              aria-controls="primary-navigation"
               onClick={() => setMobileNav(true)}
             >
               <Menu size={20} />
@@ -791,7 +798,7 @@ function Overview({ ctx }: { ctx: Context }) {
           },
           {
             label: 'Contested territories',
-            value: '04',
+            value: String(ctx.s.territories.filter((t) => !t.capital).length).padStart(2, '0'),
             icon: Flag,
             note: 'A new border. A new possibility.',
             color: 'purple',
@@ -1720,7 +1727,6 @@ function CitizensScreen({ ctx }: { ctx: Context }) {
     [error, setError] = useState('');
   useEffect(() => {
     let active = true;
-    setData(null);
     const timer = setTimeout(
       () =>
         request(
@@ -1741,6 +1747,10 @@ function CitizensScreen({ ctx }: { ctx: Context }) {
       active = false;
       clearTimeout(timer);
     };
+  }, [ctx.s.mode, ctx.s.generation, ctx.s.now, search, faction, page]);
+  useEffect(() => {
+    setData(null);
+    setError('');
   }, [ctx.s.mode, ctx.s.generation, search, faction, page]);
   return (
     <Panel>
@@ -2743,23 +2753,28 @@ function BattlesScreen({ ctx }: { ctx: Context }) {
 function LeaderboardScreen({ ctx }: { ctx: Context }) {
   const [tab, setTab] = useState('kingdoms'),
     [citizens, setCitizens] = useState<Character[]>([]),
-    [archive, setArchive] = useState<any>(null);
+    [archive, setArchive] = useState<any>(null),
+    [rankingError, setRankingError] = useState('');
   useEffect(() => {
     let active = true;
-    request(`/api/${ctx.s.mode}/characters?page=0`)
-      .then((d) => {
-        if (active) setCitizens(d.items);
+    Promise.all([
+      request(`/api/${ctx.s.mode}/characters?page=0`),
+      request(`/api/${ctx.s.mode}/seasons`),
+    ])
+      .then(([c, a]) => {
+        if (active) {
+          setCitizens(c.items);
+          setArchive(a);
+          setRankingError('');
+        }
       })
-      .catch(() => {});
-    request(`/api/${ctx.s.mode}/seasons`)
-      .then((d) => {
-        if (active) setArchive(d);
-      })
-      .catch(() => {});
+      .catch((error) => {
+        if (active) setRankingError(error.message);
+      });
     return () => {
       active = false;
     };
-  }, [ctx.s.mode, ctx.s.generation, ctx.s.revision]);
+  }, [ctx.s.mode, ctx.s.generation, ctx.s.revision, ctx.s.now]);
   const ranked = [...ctx.s.kingdoms].sort(
     (a, b) => b.points - a.points || b.wins - a.wins || a.id.localeCompare(b.id),
   );
@@ -2782,6 +2797,11 @@ function LeaderboardScreen({ ctx }: { ctx: Context }) {
           <strong>{countdown(ctx.s.season.endsAt, ctx.now)}</strong>
         </div>
       </div>
+      {rankingError && (
+        <p role="alert">
+          Rankings could not refresh: {rankingError}. Previously loaded results may be out of date.
+        </p>
+      )}
       <Panel>
         <div className="inventory-tabs">
           <button className={tab === 'kingdoms' ? 'active' : ''} onClick={() => setTab('kingdoms')}>
@@ -3674,9 +3694,10 @@ function Modal({
       t.owner !== attacker &&
       t.neighbors.some((id) => ctx.s.territories.find((t) => t.id === id)?.owner === attacker),
   );
+  const targetIds = targets.map((t) => t.id).join(',');
   useEffect(() => {
     if (!targets.some((t) => t.id === territory)) setTerritory(targets[0]?.id ?? '');
-  }, [attacker]);
+  }, [attacker, targetIds]);
   const item = ctx.hero?.gear?.find((g) => g.id === modal.item),
     def = ITEMS.find((i) => i.id === modal.item);
   const titles: Record<NonNullable<ModalState>['kind'], [string, string]> = {

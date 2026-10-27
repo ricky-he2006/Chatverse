@@ -1177,3 +1177,9 @@
 .supporter-hall > .honor-footnote {
   margin-bottom: 22px;
 }
+/* Hidden mobile navigation must not leave off-screen controls in the tab order. */
+@media (max-width: 600px) {
+  .app-shell:not(.nav-open) .sidebar {
+    visibility: hidden;
+  }
+}

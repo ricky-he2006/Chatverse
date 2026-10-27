@@ -98,9 +98,10 @@ test('forge requires three distinct successful slot upgrades and expires at its 
       w.challengeSnapshots().find((r) => r.title === 'Firstlight Forge')!.winner,
       c.name,
     );
+    const welcomeId = w.challengeSnapshots().find((r) => r.title === 'Welcome Wagon')!.id;
     w.clockOffset = 86400000;
     w.command({ subject: 'sim:late', name: 'Late' }, { type: 'join', argument: 'west' }, 'late');
-    const welcome = w.challengeSnapshots().find((r) => r.title === 'Welcome Wagon')!;
+    const welcome = w.challengeSnapshots().find((r) => r.id === welcomeId)!;
     assert.equal(welcome.status, 'expired');
     assert.equal(welcome.leaders.length, 0);
   } finally {

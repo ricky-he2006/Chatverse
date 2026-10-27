@@ -15,6 +15,16 @@ export class Steward {
       "SELECT e.* FROM narrative_jobs n JOIN events e ON e.id=n.event_id WHERE n.status='pending' ORDER BY e.id LIMIT 1",
     );
     if (!job) return;
+    const generation = this.world.get('SELECT generation FROM environment WHERE id=1')!.generation;
+    const isCurrent = () => {
+      try {
+        return (
+          this.world.get('SELECT generation FROM environment WHERE id=1')?.generation === generation
+        );
+      } catch {
+        return false;
+      }
+    };
     this.busy = true;
     try {
       const settings = this.world.settings(),
@@ -62,6 +72,7 @@ export class Steward {
       });
       if (!response.ok) throw new Error('Narrative provider unavailable');
       const output = outputSchema.parse(await response.json());
+      if (!isCurrent()) return;
       const atmosphereWords = new Set(
         'a an the and as at by for from in into of on to with through beneath beyond across above again all another awaits await bright brighter brave braver calm courage dawn day dusk echoes ember embers endures every fire flicker flickers future gathers great grows hearth hope journey lantern lanterns light lights little long moon more morning new night onward page pages quiet rises road roads sky small stars still stirs story tales together tomorrow turns warm wind winds world woven write written yet your our'.split(
           ' ',
@@ -91,6 +102,7 @@ export class Steward {
         this.world.set('aiStatus', 'Provider healthy · facts remain authoritative');
       });
     } catch {
+      if (!isCurrent()) return;
       this.world.atomic(() => {
         const failures = Number(this.world.setting('aiFailures') ?? 0) + 1;
         this.world.set('aiFailures', failures);

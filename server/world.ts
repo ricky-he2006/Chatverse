@@ -90,6 +90,8 @@ export class World extends EventEmitter {
       this.ensureChallenges();
       this.seedSupporters();
       this.run('UPDATE environment SET version=3 WHERE id=1');
+      this.run("UPDATE narrative_jobs SET status='template' WHERE status='requested'");
+      this.run("UPDATE outbox SET status='unknown' WHERE status='queued'");
     });
   }
   now() {
@@ -121,16 +123,27 @@ export class World extends EventEmitter {
     if (this.depth) return fn();
     this.db.exec('BEGIN IMMEDIATE');
     this.depth++;
+    let result: T;
     try {
-      const result = fn();
+      result = fn();
       this.db.exec('COMMIT');
-      this.depth--;
-      this.emit('change');
-      return result;
     } catch (error) {
       this.db.exec('ROLLBACK');
       this.depth--;
       throw error;
+    }
+    this.depth--;
+    this.notifyChange();
+    return result;
+  }
+  notifyChange() {
+    // Notifications are observers of committed state, never part of the game transaction.
+    for (const listener of this.rawListeners('change')) {
+      try {
+        listener.call(this);
+      } catch {
+        console.error('State committed; a realtime observer failed. Reload that view.');
+      }
     }
   }
   initialize() {
@@ -613,6 +626,21 @@ export class World extends EventEmitter {
           this.now(),
           c.id,
         );
+        if (
+          this.run(
+            'UPDATE lords SET ends_at=?,reason=? WHERE character_id=? AND ends_at>?',
+            this.now(),
+            'Changed kingdom',
+            c.id,
+            this.now(),
+          ).changes
+        )
+          this.event(
+            'council',
+            'A Lord lays down the banner',
+            `${name} relinquished leadership when changing kingdoms.`,
+            c.kingdom,
+          );
         this.event(
           'join',
           `${name} changed banners`,
@@ -661,6 +689,8 @@ export class World extends EventEmitter {
     return this.atomic(() => {
       const receipt = this.get('SELECT result FROM receipts WHERE key=?', key);
       if (receipt) return JSON.parse(receipt.result);
+      // Settle expired councils before a late gear/class/join command can affect their frozen inputs.
+      this.tick();
       const user = this.get('SELECT id FROM users WHERE subject=?', actor.subject);
       let id = user
         ? this.get('SELECT id FROM characters WHERE user_id=?', user.id)?.id
@@ -1344,6 +1374,11 @@ export class World extends EventEmitter {
     return this.atomic(() => {
       const s = this.get("SELECT * FROM seasons WHERE status='active'")!;
       if (this.now() < s.ends_at) return;
+      for (const chapter of this.all(
+        "SELECT id FROM chapters WHERE status='open' AND deadline<=?",
+        s.ends_at,
+      ))
+        this.settleChapter(chapter.id);
       for (const f of Object.keys(FACTIONS))
         this.run(
           'UPDATE kingdoms SET points=points+? WHERE id=?',
@@ -1354,28 +1389,42 @@ export class World extends EventEmitter {
             )!.n,
           f,
         );
-      let rank = 0;
-      for (const f of this.all('SELECT * FROM kingdoms ORDER BY points DESC,wins DESC,id'))
+      let rank = 0,
+        place = 0,
+        previousScore: number | undefined,
+        previousWins: number | undefined;
+      for (const f of this.all('SELECT * FROM kingdoms ORDER BY points DESC,wins DESC,id')) {
+        place++;
+        if (f.points !== previousScore || f.wins !== previousWins) rank = place;
+        previousScore = f.points;
+        previousWins = f.wins;
         this.run(
           'INSERT INTO season_awards VALUES (?,?,?,?,?)',
           s.id,
           'kingdom',
           f.id,
           f.points,
-          ++rank,
+          rank,
         );
+      }
       rank = 0;
+      place = 0;
+      previousScore = undefined;
       for (const c of this.all(
         'SELECT id,contribution FROM characters ORDER BY contribution DESC,id',
-      ))
+      )) {
+        place++;
+        if (c.contribution !== previousScore) rank = place;
+        previousScore = c.contribution;
         this.run(
           'INSERT INTO season_awards VALUES (?,?,?,?,?)',
           s.id,
           'citizen',
           c.id,
           c.contribution,
-          ++rank,
+          rank,
         );
+      }
       this.run("UPDATE seasons SET status='closed' WHERE id=?", s.id);
       this.run(
         "UPDATE chapters SET status='cancelled',resolved_at=? WHERE status IN('open','paused')",

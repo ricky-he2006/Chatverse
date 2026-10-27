@@ -1,5 +1,7 @@
 # ChatVerse
 
+See the [full project audit](docs/AUDIT.md) for confirmed fixes, 56-test verification, performance measurements and remaining real Twitch/OBS validation gates.
+
 Supporter honors are implemented: Citizen / Knight / Baron / Duke, with separate elected Lord status. Try simulated rank previews on **Character & gear**. Live ranks require optional Twitch subscription authorization; see [supporter rank setup and rules](docs/SUPPORTER_RANKS.md).
 
 The living atlas now reveals new outposts as kingdoms grow, with capped fortress health and daily first-completion community challenges. See [world expansion and race rules](docs/WORLD_EXPANSION.md). Restart the local server after updating to apply the additive migration.
