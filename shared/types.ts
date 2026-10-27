@@ -167,6 +167,7 @@ export type IntegrationStatus = {
   subscriptions: boolean;
 };
 export type WorldSnapshot = {
+  realmId?: string;
   worldVersion?: number;
   challenges?: import('./expansion').RealmChallenge[];
   mode: Mode;

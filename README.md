@@ -1,5 +1,7 @@
 # ChatVerse
 
+Open **World atlas** to explore four persistent Simulation streamer realms, then enter each realm's own kingdom map. Live remains limited to the authorized channel. [Connected-world scope and setup](docs/CONNECTED_WORLD.md).
+
 See the [full project audit](docs/AUDIT.md) for confirmed fixes, 56-test verification, performance measurements and remaining real Twitch/OBS validation gates.
 
 Supporter honors are implemented: Citizen / Knight / Baron / Duke, with separate elected Lord status. Try simulated rank previews on **Character & gear**. Live ranks require optional Twitch subscription authorization; see [supporter rank setup and rules](docs/SUPPORTER_RANKS.md).

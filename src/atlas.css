@@ -1,0 +1,708 @@
+/* The atlas and local realm maps share one palette, emblem system and illustrated world. */
+.atlas-page {
+  display: grid;
+  gap: 24px;
+}
+.atlas-intro {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 35px;
+  padding: 12px 0 6px;
+}
+.atlas-intro h1 {
+  font:
+    clamp(28px, 3vw, 36px)/1.2 Georgia,
+    serif;
+  color: #eee4cf;
+  margin: 10px 0 12px;
+  letter-spacing: -0.7px;
+}
+.atlas-intro p {
+  font-size: 12px;
+  color: #9dacb9;
+  line-height: 1.8;
+  max-width: 460px;
+}
+.atlas-totals {
+  display: flex;
+  gap: 32px;
+}
+.atlas-totals > div {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-left: 23px;
+  border-left: 1px solid #ffffff12;
+}
+.atlas-totals strong {
+  font:
+    32px Georgia,
+    serif;
+  color: #e4d6b5;
+}
+.atlas-totals span {
+  font-size: 10px;
+  color: #8e9eae;
+  white-space: nowrap;
+}
+.atlas-source {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  border: 1px solid #b6a2d22b;
+  border-radius: 8px;
+  background: #18162988;
+  padding: 12px 16px;
+  color: #b3a2cb;
+  font-size: 10px;
+  line-height: 1.8;
+  letter-spacing: 0.3px;
+}
+.atlas-source svg {
+  flex-shrink: 0;
+}
+.atlas-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 310px;
+  gap: 22px;
+  align-items: start;
+}
+.atlas-map-panel {
+  overflow: hidden;
+  min-width: 0;
+}
+.atlas-map-heading {
+  padding: 22px;
+  display: flex;
+  justify-content: space-between;
+  gap: 15px;
+  align-items: center;
+}
+.atlas-map-heading h3 {
+  font:
+    22px Georgia,
+    serif;
+  margin: 7px 0 0;
+}
+.atlas-map-scroll {
+  overflow: auto;
+}
+.atlas-pan-hint {
+  display: none;
+}
+.reaches-map {
+  position: relative;
+  aspect-ratio: 1.67;
+  min-width: 580px;
+  isolation: isolate;
+  background: #0d1825;
+}
+.reaches-map > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.reaches-map:after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  box-shadow: inset 0 0 55px #05101c8c;
+  pointer-events: none;
+}
+.atlas-map-node {
+  position: absolute;
+  transform: translate(-50%, -63%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  z-index: 2;
+  border: 0;
+  background: none;
+  color: #e1e5e7;
+  padding: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  text-shadow: 0 2px 5px #000;
+}
+.atlas-node-sigil {
+  display: grid;
+  place-items: center;
+  width: 49px;
+  height: 58px;
+  color: var(--realm-accent);
+  font:
+    34px Georgia,
+    serif;
+  background: linear-gradient(135deg, #18283a, #0b131e);
+  clip-path: polygon(0 0, 100% 0, 100% 78%, 50% 100%, 0 78%);
+  filter: drop-shadow(0 0 15px var(--realm-accent));
+  margin-bottom: 5px;
+}
+.atlas-map-node strong {
+  font:
+    13px Georgia,
+    serif;
+  background: #0a1523df;
+  padding: 5px 9px;
+  border-radius: 5px;
+  border: 1px solid #ffffff15;
+  transition: border-color 0.2s;
+}
+.atlas-map-node small {
+  font-size: 8px;
+  color: var(--realm-accent);
+}
+.atlas-node-population {
+  font-size: 8px;
+  color: #a5b1bd;
+}
+.atlas-map-node.selected strong,
+.atlas-map-node:hover strong,
+.atlas-map-node:focus-visible strong {
+  border-color: var(--realm-accent);
+  box-shadow: 0 0 20px color-mix(in srgb, var(--realm-accent) 17%, transparent);
+}
+.atlas-map-node.selected .atlas-node-sigil {
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--realm-accent) 22%, #18283a),
+    #0b131e
+  );
+}
+.atlas-map-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 13px;
+  padding: 15px 20px;
+  color: #9eacba;
+  font-size: 9px;
+  border-top: 1px solid #ffffff0b;
+}
+.atlas-map-legend i {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  background: #d1b77d;
+  border-radius: 50%;
+  margin-right: 5px;
+}
+.atlas-map-legend small {
+  margin-left: auto;
+  font-size: 8px;
+  color: #d1b77d;
+}
+.atlas-inspector {
+  scroll-margin-top: 84px;
+  overflow: hidden;
+  border-top: 2px solid var(--realm-accent);
+  padding: 0 !important;
+}
+.atlas-realm-art,
+.realm-card-cover {
+  background-image:
+    linear-gradient(0deg, #0f1926ef, transparent 95%), url('/everfall-realms-v2.png');
+  background-size: cover, 310%;
+  background-position: center, left;
+  position: relative;
+}
+.theme-ember .atlas-realm-art,
+.theme-ember .realm-card-cover {
+  background-position: center, 53%;
+}
+.theme-moon .atlas-realm-art,
+.theme-moon .realm-card-cover {
+  background-position: center, right;
+}
+.theme-verdant .atlas-realm-art,
+.theme-verdant .realm-card-cover {
+  background-position: center, 35%;
+}
+.atlas-realm-art {
+  height: 147px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-direction: column;
+  gap: 14px;
+  padding: 17px;
+}
+.atlas-realm-art .eyebrow {
+  font-size: 7px;
+  letter-spacing: 1.4px;
+}
+.atlas-large-sigil {
+  font:
+    49px/1 Georgia,
+    serif;
+  color: var(--realm-accent);
+  text-shadow: 0 0 28px #000;
+  filter: drop-shadow(0 0 7px #000);
+}
+.atlas-inspector-body {
+  padding: 20px;
+}
+.realm-streamer {
+  color: var(--realm-accent);
+  font-size: 10px;
+  letter-spacing: 0.3px;
+}
+.atlas-inspector-body h2 {
+  font:
+    27px/1.2 Georgia,
+    serif;
+  margin: 8px 0 12px;
+}
+.atlas-inspector-body > p {
+  color: #9aaabb;
+  font-size: 11px;
+  line-height: 1.8;
+}
+.atlas-realm-numbers {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 17px 0;
+  padding-bottom: 18px;
+  border-bottom: 1px solid #ffffff12;
+  font-size: 10px;
+  color: #d1d5d9;
+}
+.atlas-realm-numbers span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.atlas-kingdoms {
+  display: grid;
+  gap: 15px;
+}
+.atlas-kingdoms > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.atlas-kingdoms strong {
+  font-size: 11px;
+  font-weight: 500;
+}
+.atlas-kingdoms small {
+  display: block;
+  font-size: 9px;
+  color: #8c9cac;
+  margin-top: 4px;
+}
+.atlas-discovery {
+  margin: 22px 0 18px;
+}
+.atlas-discovery > span {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+}
+.atlas-discovery progress {
+  width: 100%;
+  height: 5px;
+  accent-color: var(--realm-accent);
+  margin: 9px 0;
+}
+.atlas-discovery progress::-webkit-progress-bar {
+  background: #293643;
+  border-radius: 4px;
+}
+.atlas-discovery progress::-webkit-progress-value {
+  background: var(--realm-accent);
+  border-radius: 4px;
+}
+.atlas-discovery small {
+  display: block;
+  font-size: 9px;
+  color: #8f9faf;
+  line-height: 1.8;
+}
+.atlas-inspector-body > .button {
+  font-size: 10px;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.6;
+}
+.atlas-isolation {
+  display: block;
+  text-align: center;
+  font-size: 8px;
+  color: #8495a6;
+  line-height: 1.7;
+  margin-top: 12px;
+}
+.atlas-directory-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 20px;
+  margin-top: 5px;
+}
+.atlas-directory-heading h2 {
+  font:
+    26px Georgia,
+    serif;
+  margin: 8px 0 0;
+}
+.atlas-filters {
+  display: flex;
+  gap: 10px;
+}
+.atlas-filters label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #ffffff15;
+  border-radius: 7px;
+  background: #101a26;
+  padding: 9px 11px;
+  color: #8f9eae;
+}
+.atlas-filters input {
+  background: none;
+  border: 0;
+  outline: none;
+  color: #dde3e7;
+  min-width: 0;
+  width: 160px;
+  font-size: 10px;
+}
+.atlas-filters select {
+  font-size: 10px;
+  padding: 8px;
+  background: #111c29;
+  border: 1px solid #ffffff15;
+  border-radius: 7px;
+  color: #b9c5cf;
+}
+.atlas-realm-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 17px;
+}
+.realm-card {
+  overflow: hidden;
+  border: 1px solid #ffffff12;
+  border-radius: 12px;
+  background: #101a27;
+  min-width: 0;
+}
+.realm-card.current-realm {
+  border-color: color-mix(in srgb, var(--realm-accent) 55%, transparent);
+}
+.realm-card-cover {
+  height: 132px;
+  width: 100%;
+  border: 0;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  color: var(--realm-accent);
+}
+.realm-card-cover:focus-visible {
+  outline: 2px solid var(--realm-accent);
+  outline-offset: -4px;
+}
+.realm-card-sigil {
+  font:
+    43px Georgia,
+    serif;
+  text-shadow: 0 2px 15px #000;
+}
+.realm-card-source {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  font-size: 6px;
+  letter-spacing: 1.5px;
+  padding: 4px 6px;
+  background: #091320bb;
+  color: #b8c1ce;
+  border: 1px solid #ffffff20;
+  border-radius: 3px;
+}
+.realm-current-label {
+  position: absolute;
+  bottom: 11px;
+  font-size: 6px;
+  letter-spacing: 1.2px;
+  color: var(--realm-accent);
+}
+.realm-card-body {
+  padding: 18px;
+}
+.realm-card-body h3 {
+  font:
+    22px/1.2 Georgia,
+    serif;
+  margin: 9px 0;
+}
+.realm-card-body > p {
+  min-height: 54px;
+  line-height: 1.8;
+  color: #92a3b4;
+  font-size: 10px;
+}
+.realm-card-stats {
+  display: flex;
+  gap: 11px;
+  flex-wrap: wrap;
+  color: #bac5cf;
+  font-size: 9px;
+  padding: 14px 0;
+  border-bottom: 1px solid #ffffff10;
+}
+.realm-card-stats span {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+.realm-card-chapter {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  color: #9daebb;
+  font-size: 9px;
+  padding: 14px 0;
+  min-height: 60px;
+  line-height: 1.7;
+}
+.realm-card-chapter svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--realm-accent);
+}
+.realm-card-body > .button {
+  font-size: 10px;
+}
+.atlas-loading,
+.atlas-empty {
+  padding: 40px;
+  text-align: center;
+}
+.atlas-loading > svg {
+  color: #d0b780;
+}
+.atlas-empty {
+  grid-column: 1/-1;
+}
+.realm-map-banner {
+  grid-column: 1/-1;
+  grid-row: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  background: linear-gradient(110deg, color-mix(in srgb, var(--realm-accent) 9%, #101a26), #0d1520);
+  border: 1px solid color-mix(in srgb, var(--realm-accent) 25%, transparent);
+  padding: 22px;
+  border-radius: 12px;
+}
+.realm-map-banner h2 {
+  font:
+    28px Georgia,
+    serif;
+  margin: 9px 0;
+}
+.realm-map-banner p {
+  font-size: 11px;
+  color: #9bafbc;
+  margin: 0;
+}
+.realm-map-banner .button {
+  font-size: 10px;
+}
+.world-screen-grid > .full-map-panel {
+  grid-row: 2;
+}
+.world-screen-grid > .world-inspector {
+  grid-row: 3 / span 2;
+}
+.realm-theme-ember .scenic-atlas > img {
+  filter: brightness(0.8) saturate(1) sepia(0.13);
+}
+.realm-theme-moon .scenic-atlas > img {
+  filter: brightness(0.74) saturate(0.8) hue-rotate(17deg);
+}
+.realm-theme-verdant .scenic-atlas > img {
+  filter: brightness(0.79) saturate(0.8) hue-rotate(-17deg);
+}
+@media (max-width: 1250px) {
+  .atlas-realm-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .atlas-totals {
+    gap: 19px;
+  }
+  .atlas-totals > div {
+    padding-left: 15px;
+  }
+  .atlas-layout {
+    grid-template-columns: minmax(0, 1fr) 280px;
+  }
+  .atlas-directory-heading {
+    align-items: start;
+    flex-direction: column;
+  }
+}
+@media (max-width: 1100px) {
+  .atlas-layout {
+    grid-template-columns: 1fr;
+  }
+  .atlas-inspector {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+  }
+  .atlas-realm-art {
+    height: 100%;
+    min-height: 260px;
+    background-size:
+      cover,
+      auto 100%;
+    padding: 25px;
+  }
+  .atlas-inspector-body {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 25px;
+  }
+  .atlas-inspector-body > .realm-streamer,
+  .atlas-inspector-body > h2,
+  .atlas-inspector-body > p,
+  .atlas-isolation {
+    grid-column: 1/-1;
+  }
+  .atlas-kingdoms {
+    grid-column: 2;
+    grid-row: 4 / span 3;
+  }
+  .atlas-realm-numbers {
+    flex-wrap: wrap;
+  }
+  .atlas-inspector-body > .button {
+    grid-column: 1;
+  }
+  .world-screen-grid > .world-inspector {
+    grid-row: auto;
+  }
+  .atlas-intro {
+    gap: 24px;
+  }
+  .atlas-totals {
+    gap: 14px;
+  }
+  .atlas-totals strong {
+    font-size: 27px;
+  }
+}
+@media (max-width: 700px) {
+  .atlas-pan-hint {
+    display: block;
+    padding: 0 18px 12px;
+    color: #91a3b1;
+    font-size: 9px;
+  }
+  .atlas-intro {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 18px;
+  }
+  .atlas-totals {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .atlas-totals > div {
+    padding-left: 15px;
+  }
+  .atlas-totals > div:first-child {
+    padding-left: 0;
+    border-left: 0;
+  }
+  .atlas-layout {
+    gap: 18px;
+  }
+  .atlas-inspector {
+    display: block;
+  }
+  .atlas-realm-art {
+    height: 140px;
+    min-height: 0;
+    background-size: cover, 310%;
+  }
+  .atlas-inspector-body {
+    display: block;
+  }
+  .atlas-source {
+    font-size: 9px;
+  }
+  .atlas-map-heading {
+    padding: 18px;
+  }
+  .atlas-map-heading h3 {
+    font-size: 19px;
+  }
+  .atlas-filters {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+  .atlas-filters label {
+    flex: 1;
+  }
+  .atlas-filters input {
+    width: 100%;
+  }
+  .atlas-realm-grid {
+    gap: 12px;
+  }
+  .realm-card-body {
+    padding: 14px;
+  }
+  .realm-card-body h3 {
+    font-size: 20px;
+  }
+  .realm-card-cover {
+    height: 112px;
+  }
+  .realm-card-body > p {
+    min-height: 78px;
+  }
+  .realm-map-banner {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 19px;
+  }
+  .realm-map-banner h2 {
+    font-size: 25px;
+  }
+  .atlas-directory-heading h2 {
+    font-size: 23px;
+  }
+  .atlas-map-legend small {
+    margin-left: 0;
+  }
+}
+@media (max-width: 400px) {
+  .atlas-realm-grid {
+    grid-template-columns: 1fr;
+  }
+  .realm-card-body > p {
+    min-height: 0;
+  }
+  .realm-card-cover {
+    height: 150px;
+  }
+  .atlas-realm-numbers {
+    justify-content: flex-start;
+    gap: 20px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .atlas-map-node strong {
+    transition: none;
+  }
+}

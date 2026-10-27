@@ -6,6 +6,7 @@ import { TwitchIntegration } from './twitch';
 import { Steward } from './steward';
 import { createApp } from './app';
 import { acquireInstallationLock } from './lock';
+import { RealmRegistry } from './realms';
 if (existsSync('.env'))
   for (const line of readFileSync('.env', 'utf8').split(/\r?\n/)) {
     const match = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/);
@@ -23,17 +24,21 @@ const twitch = new TwitchIntegration(
   worlds.live,
   new TokenVault(resolve(directory, 'twitch.dpapi')),
 );
-const stewards = [new Steward(worlds.simulation), new Steward(worlds.live)];
+const registry = new RealmRegistry(worlds, directory);
+const stewards = new Map<World, Steward>();
 const port = Number(process.env.PORT ?? 3000);
-const { app, bootstrap } = await createApp(worlds, twitch, { port });
+const { app, bootstrap } = await createApp(worlds, twitch, { port, registry });
 const timer = setInterval(() => {
-  for (const world of Object.values(worlds))
+  for (const world of registry.allWorlds())
     try {
       world.tick();
     } catch (error) {
       console.error('Scheduler paused:', error instanceof Error ? error.message : 'Unknown error');
     }
-  for (const steward of stewards) void steward.tick();
+  for (const world of registry.allWorlds()) {
+    if (!stewards.has(world)) stewards.set(world, new Steward(world));
+    void stewards.get(world)!.tick();
+  }
 }, 1000);
 timer.unref();
 await app.listen({ port, host: '127.0.0.1' });
@@ -49,6 +54,7 @@ async function stop() {
   twitch.close();
   app.server.closeAllConnections();
   await app.close();
+  registry.close();
   for (const w of Object.values(worlds)) w.close();
   process.exit(0);
 }

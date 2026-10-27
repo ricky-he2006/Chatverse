@@ -12,6 +12,10 @@ export class ApiError extends Error {
 export function setCsrf(value: string) {
   csrf = value;
 }
+export const realmUrl = (path: string, realm = 'home') =>
+  path + (path.includes('?') ? '&' : '?') + 'realm=' + encodeURIComponent(realm);
+export const realmRequest = <T = any>(path: string, realm = 'home', options: RequestInit = {}) =>
+  request<T>(realmUrl(path, realm), options);
 export async function request<T = any>(path: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(path, {
     ...options,
@@ -26,8 +30,14 @@ export async function request<T = any>(path: string, options: RequestInit = {}):
     );
   return body;
 }
-export const mutate = <T = any>(mode: Mode, path: string, body: unknown = {}, method = 'POST') =>
-  request<T>(`/api/${mode}/${path}`, {
+export const mutate = <T = any>(
+  mode: Mode,
+  path: string,
+  body: unknown = {},
+  method = 'POST',
+  realm = 'home',
+) =>
+  realmRequest<T>(`/api/${mode}/${path}`, realm, {
     method,
     body: JSON.stringify(body),
     headers: { 'Idempotency-Key': crypto.randomUUID() },

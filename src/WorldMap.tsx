@@ -51,18 +51,20 @@ export function WorldMap({
   onSelect,
   selected,
   compact = false,
+  realmName = 'Everfall',
 }: {
   territories: Territory[];
   onSelect?: (id: string) => void;
   selected?: string;
   compact?: boolean;
+  realmName?: string;
 }) {
   const map = territories.length ? territories : TERRITORIES;
   return (
     <div className={`scenic-atlas ${compact ? 'compact' : ''}`}>
       <img
         src="/everfall-realms-v2.png"
-        alt="Snowbound North, sunlit East and moonlit West surround Everfall's lake"
+        alt={`Snowbound North, sunlit East and moonlit West surround the lake of ${realmName}`}
       />
       <svg
         viewBox="0 0 1000 360"
@@ -130,7 +132,7 @@ export function WorldMap({
         );
       })}
       <div className="atlas-caption">
-        EVERFALL <span>A world built by its people</span>
+        {realmName.toUpperCase()} <span>A world built by its people</span>
       </div>
     </div>
   );

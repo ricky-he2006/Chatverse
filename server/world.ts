@@ -6,6 +6,7 @@ import {
   type RealmChallenge,
 } from '../shared/expansion';
 import { DatabaseSync } from 'node:sqlite';
+import { realmIdentity } from '../shared/realms';
 import { SUPPORTER_RANKS, type SupporterStatus, type SupporterTier } from '../shared/supporters';
 import { readFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
@@ -71,6 +72,7 @@ export class World extends EventEmitter {
     public mode: Mode,
     public filename: string,
     private clock = () => Date.now(),
+    public readonly realmId = 'home',
   ) {
     super();
     if (filename !== ':memory:') mkdirSync(dirname(filename), { recursive: true });
@@ -83,6 +85,12 @@ export class World extends EventEmitter {
       throw new Error('Database environment or schema mismatch');
     }
     if (!env) this.run('INSERT INTO environment VALUES (1,?,?,1)', mode, randomUUID());
+    const boundRealm = this.setting('realmIdentity');
+    if ((boundRealm && boundRealm !== realmId) || (mode === 'live' && realmId !== 'home')) {
+      this.db.close();
+      throw new Error('Database realm mismatch. Restore this backup to its original realm.');
+    }
+    this.set('realmIdentity', realmId);
     this.clockOffset = Number(this.setting('clockOffset') ?? 0);
     if (!this.get('SELECT id FROM kingdoms LIMIT 1')) this.initialize();
     this.atomic(() => {
@@ -160,7 +168,10 @@ export class World extends EventEmitter {
         this.now() + WEEK,
         'active',
       );
-      this.set('realm', this.mode === 'simulation' ? 'The Everfall Realm' : 'Your Twitch realm');
+      this.set(
+        'realm',
+        this.mode === 'simulation' ? realmIdentity(this.realmId).name : 'Your Twitch realm',
+      );
       this.set('config', {
         quiet: false,
         autoChapters: false,
@@ -406,7 +417,8 @@ export class World extends EventEmitter {
           this.now() + WEEK,
           'active',
         );
-        this.set('realm', 'The Everfall Realm');
+        this.set('realm', realmIdentity(this.realmId).name);
+        this.set('realmIdentity', this.realmId);
         this.set('config', {
           quiet: false,
           autoChapters: false,
@@ -418,6 +430,7 @@ export class World extends EventEmitter {
         this.syncGrowth();
         this.ensureChallenges();
         this.seedSupporters();
+        if (this.realmId !== 'home') this.set('realmSeeded', true);
       });
     } finally {
       this.db.exec('PRAGMA foreign_keys=ON');
@@ -1593,6 +1606,7 @@ export class World extends EventEmitter {
     });
     return {
       worldVersion: 2,
+      realmId: this.realmId,
       challenges: this.challengeSnapshots(),
       mode: this.mode,
       generation: env.generation,

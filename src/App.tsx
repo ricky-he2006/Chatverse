@@ -72,7 +72,9 @@ import type {
   WorldSnapshot,
 } from '../shared/types';
 import { CLASSES, FACTIONS, ITEMS, SCENARIOS, TACTICS } from '../shared/catalog';
-import { ApiError, mutate, request, setCsrf } from './api';
+import { ApiError, mutate, request, realmRequest, realmUrl, setCsrf } from './api';
+import { realmIdentity, REALMS } from '../shared/realms';
+import { WorldAtlas } from './WorldAtlas';
 import { Crest, Landscape, RealmArtwork, WorldMap } from './WorldMap';
 import { SUPPORTER_RANKS, type SupporterTier } from '../shared/supporters';
 import {
@@ -98,6 +100,7 @@ import {
 
 type Screen =
   | 'overview'
+  | 'atlas'
   | 'world'
   | 'kingdoms'
   | 'citizens'
@@ -109,7 +112,8 @@ type Screen =
   | 'settings';
 const navigation: { id: Screen; label: string; icon: typeof Home }[] = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
-  { id: 'world', label: 'World map', icon: Map },
+  { id: 'atlas', label: 'World atlas', icon: Compass },
+  { id: 'world', label: 'Realm map', icon: Map },
   { id: 'kingdoms', label: 'Kingdoms', icon: Crown },
   { id: 'citizens', label: 'Citizens', icon: Users },
   { id: 'character', label: 'Character & gear', icon: Shield },
@@ -135,6 +139,7 @@ type ModalState = {
 } | null;
 type Context = {
   s: WorldSnapshot;
+  openRealm: (id: string) => void;
   hero: Character | null;
   now: number;
   busy: boolean;
@@ -153,10 +158,16 @@ type Context = {
   selectedBattle: string | null;
   setBattle: (id: string) => void;
 };
+const savedRealm = (value: string | null) => (REALMS.some((r) => r.id === value) ? value! : 'home');
 
 export function App() {
   const initial = new URLSearchParams(location.search);
   const [mode, setMode] = useState<Mode>(initial.get('mode') === 'live' ? 'live' : 'simulation');
+  const [realm, setRealm] = useState(() =>
+    initial.get('mode') === 'live'
+      ? 'home'
+      : savedRealm(initial.get('realm') ?? localStorage.getItem('cv:simulation:realm')),
+  );
   const [screen, setScreen] = useState<Screen>(
     navigation.some((n) => n.id === initial.get('screen'))
       ? (initial.get('screen') as Screen)
@@ -170,7 +181,10 @@ export function App() {
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false);
   const [persona, setPersonaValue] = useState(
-    () => localStorage.getItem('cv:simulation:persona') ?? 'sim-0001',
+    () =>
+      localStorage.getItem(`cv:${mode}:${realm}:persona`) ??
+      (realm === 'home' ? localStorage.getItem(`cv:${mode}:persona`) : null) ??
+      (mode === 'simulation' ? 'sim-0001' : 'none'),
   );
   const [selectedFaction, setFaction] = useState<Faction>('north'),
     [selectedBattle, setBattle] = useState<string | null>(null);
@@ -180,6 +194,7 @@ export function App() {
     [mobileNav, setMobileNav] = useState(false),
     [tick, setTick] = useState(Date.now()),
     [online, setOnline] = useState(true);
+  const activeRealm = useRef(realm);
   const activeMode = useRef(mode),
     loadRef = useRef<() => Promise<void>>(async () => {}),
     toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -188,6 +203,9 @@ export function App() {
     if (toastTimer.current) clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToast(''), 5000);
   };
+  useEffect(() => {
+    if (mode === 'simulation') localStorage.setItem('cv:simulation:realm', realm);
+  }, [mode, realm]);
   useEffect(() => {
     request('/api/session')
       .then((data) => {
@@ -200,36 +218,52 @@ export function App() {
       });
   }, []);
   const setPersona = useCallback((id: string) => {
-    localStorage.setItem(`cv:${activeMode.current}:persona`, id);
+    localStorage.setItem(`cv:${activeMode.current}:${activeRealm.current}:persona`, id);
     setPersonaValue(id);
   }, []);
   const loadVersion = useRef(0);
   const load = useCallback(async () => {
     const requestedMode = mode;
+    const requestedRealm = realm;
     const requestVersion = ++loadVersion.current;
     try {
-      const data = await request<WorldSnapshot>(
+      const data = await realmRequest<WorldSnapshot>(
         `/api/${mode}/snapshot?persona=${encodeURIComponent(persona)}`,
+        realm,
       );
-      if (activeMode.current !== requestedMode || requestVersion !== loadVersion.current) return;
+      if (
+        activeMode.current !== requestedMode ||
+        activeRealm.current !== requestedRealm ||
+        requestVersion !== loadVersion.current
+      )
+        return;
+      if ((data.realmId ?? 'home') !== realm)
+        throw new Error(
+          'This server cannot open that realm. Restart ChatVerse to load multi-realm support.',
+        );
       setSnapshot(data);
       setError('');
     } catch (err) {
-      if (activeMode.current === requestedMode && requestVersion === loadVersion.current) {
+      if (
+        activeMode.current === requestedMode &&
+        activeRealm.current === requestedRealm &&
+        requestVersion === loadVersion.current
+      ) {
         setError((err as Error).message);
         if (err instanceof ApiError && err.status === 401) setUnlocked(false);
       }
     }
-  }, [mode, persona]);
+  }, [mode, realm, persona]);
   loadRef.current = load;
   useEffect(() => {
     if (!unlocked) return;
     activeMode.current = mode;
+    activeRealm.current = realm;
     setSnapshot(null);
     setHero(null);
     setError('');
     void load();
-    const events = new EventSource(`/api/${mode}/events`);
+    const events = new EventSource(realmUrl(`/api/${mode}/events`, realm));
     let pending: ReturnType<typeof setTimeout> | null = null;
     events.onopen = () => setOnline(true);
     events.onerror = () => setOnline(false);
@@ -243,7 +277,7 @@ export function App() {
       clearInterval(timer);
       if (pending) clearTimeout(pending);
     };
-  }, [mode, unlocked]);
+  }, [mode, realm, unlocked]);
   useEffect(() => {
     if (unlocked) void load();
   }, [persona, load, unlocked]);
@@ -262,7 +296,7 @@ export function App() {
     }
     let cancelled = false;
     const id = persona;
-    request<Character>(`/api/${mode}/characters/${encodeURIComponent(id)}`)
+    realmRequest<Character>(`/api/${mode}/characters/${encodeURIComponent(id)}`, realm)
       .then((c) => {
         if (!cancelled) setHero(c);
       })
@@ -272,25 +306,59 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [mode, persona, snapshot, unlocked]);
+  }, [mode, realm, persona, snapshot, unlocked]);
   const go = (next: Screen) => {
     setScreen(next);
     setMobileNav(false);
-    const q = new URLSearchParams({ mode, screen: next });
+    const q = new URLSearchParams({ mode, realm, screen: next });
     history.replaceState(null, '', `/?${q}`);
     window.scrollTo({ top: 0, behavior: 'instant' });
   };
   const changeMode = (next: Mode) => {
-    if (next === mode) return;
+    if (next === mode || busy) return;
+    const nextRealm =
+      next === 'live' ? 'home' : savedRealm(localStorage.getItem('cv:simulation:realm'));
+    activeRealm.current = nextRealm;
+    setRealm(nextRealm);
+    loadVersion.current++;
     activeMode.current = next;
     setSnapshot(null);
     setHero(null);
     setModal(null);
     setPersonaValue(
-      localStorage.getItem(`cv:${next}:persona`) ?? (next === 'simulation' ? 'sim-0001' : 'none'),
+      localStorage.getItem(`cv:${next}:${nextRealm}:persona`) ??
+        (nextRealm === 'home' ? localStorage.getItem(`cv:${next}:persona`) : null) ??
+        (next === 'simulation' ? 'sim-0001' : 'none'),
     );
     setMode(next);
-    history.replaceState(null, '', `/?mode=${next}&screen=${screen}`);
+    setBattle(null);
+    setTerritory('crossroads');
+    history.replaceState(null, '', `/?mode=${next}&realm=${nextRealm}&screen=${screen}`);
+  };
+  const openRealm = (id: string) => {
+    if (busy || !REALMS.some((r) => r.id === id) || (mode === 'live' && id !== 'home')) return;
+    if (id === realm) {
+      go('world');
+      return;
+    }
+    activeRealm.current = id;
+    loadVersion.current++;
+    setRealm(id);
+    setSnapshot(null);
+    setHero(null);
+    setModal(null);
+    setBattle(null);
+    setTerritory('crossroads');
+    setFaction('north');
+    setScreen('world');
+    if (mode === 'simulation') localStorage.setItem('cv:simulation:realm', id);
+    setPersonaValue(
+      localStorage.getItem(`cv:${mode}:${id}:persona`) ??
+        (id === 'home' ? localStorage.getItem(`cv:${mode}:persona`) : null) ??
+        (mode === 'simulation' ? 'sim-0001' : 'none'),
+    );
+    history.replaceState(null, '', `/?mode=${mode}&realm=${id}&screen=world`);
+    window.scrollTo({ top: 0, behavior: 'instant' });
   };
   const run = async <T,>(fn: () => Promise<T>, success?: string): Promise<T | undefined> => {
     setBusy(true);
@@ -307,11 +375,13 @@ export function App() {
     }
   };
   const action = (path: string, body: unknown = {}, method = 'POST') =>
-    mutate(mode, path, body, method);
+    mutate(mode, path, body, method, realm);
   const command = async (type: string, argument?: string) => {
-    const requestedMode = mode;
+    const requestedMode = mode,
+      requestedRealm = realm;
     const result = await run(() => action('commands', { type, argument, persona }));
-    if (activeMode.current !== requestedMode) return result;
+    if (activeMode.current !== requestedMode || activeRealm.current !== requestedRealm)
+      return result;
     if (result?.message) notify(result.message);
     if (result?.characterId && result.characterId !== persona) setPersona(result.characterId);
     return result;
@@ -399,6 +469,7 @@ export function App() {
   const ctx: Context | null = snapshot
     ? {
         s: snapshot,
+        openRealm,
         hero,
         now: serverNow,
         busy,
@@ -419,7 +490,10 @@ export function App() {
       }
     : null;
   return (
-    <div className={`app-shell ${mobileNav ? 'nav-open' : ''}`}>
+    <div
+      className={`app-shell realm-theme-${realmIdentity(realm).theme} ${mobileNav ? 'nav-open' : ''}`}
+      style={{ '--realm-accent': realmIdentity(realm).color } as CSSProperties}
+    >
       {mobileNav && (
         <button
           className="nav-backdrop"
@@ -431,7 +505,7 @@ export function App() {
         <a
           className="brand"
           aria-label="ChatVerse overview"
-          href="/?screen=overview"
+          href={`/?mode=${mode}&realm=${realm}&screen=overview`}
           onClick={(e) => {
             e.preventDefault();
             go('overview');
@@ -445,14 +519,20 @@ export function App() {
           </span>
         </a>
         <div className="realm-label">YOUR WORLD</div>
-        <button className="realm-selector" onClick={() => go('settings')}>
+        <button
+          className="realm-selector"
+          onClick={() => go('atlas')}
+          aria-label="Choose a streamer realm"
+        >
           <div className="realm-icon">
             <Compass size={21} />
           </div>
           <span>
             {snapshot?.realm ?? 'Your realm'}
             <small>
-              {mode === 'simulation' ? 'A world of possibilities' : 'Twitch Live realm'}
+              {mode === 'simulation'
+                ? realmIdentity(realm).streamer + ' · Simulation'
+                : 'Twitch Live realm'}
             </small>
           </span>
           <ChevronDown size={14} />
@@ -461,7 +541,7 @@ export function App() {
         <nav aria-label="Main navigation">
           {navigation.map((n, i) => (
             <div key={n.id}>
-              {i === 8 && <div className="nav-label manage-label">WORLD MANAGEMENT</div>}
+              {n.id === 'steward' && <div className="nav-label manage-label">WORLD MANAGEMENT</div>}
               <button
                 aria-label={n.label}
                 title={n.label}
@@ -590,8 +670,17 @@ export function App() {
             </div>
           ) : (
             <>
-              <PageHeader ctx={ctx} screen={screen} />
+              {screen !== 'atlas' && <PageHeader ctx={ctx} screen={screen} />}
               {screen === 'overview' && <Overview ctx={ctx} />}
+              {screen === 'atlas' && (
+                <WorldAtlas
+                  mode={mode}
+                  realmId={realm}
+                  openRealm={openRealm}
+                  busy={busy}
+                  now={ctx.s.now}
+                />
+              )}
               {screen === 'world' && <WorldScreen ctx={ctx} />}
               {screen === 'kingdoms' && <KingdomScreen ctx={ctx} />}
               {screen === 'citizens' && <CitizensScreen ctx={ctx} />}
@@ -635,6 +724,10 @@ function PageHeader({ ctx, screen }: { ctx: Context; screen: Screen }) {
     overview: [
       'Your kingdom is alive.',
       'Every citizen has a story. Every stream writes a new chapter.',
+    ],
+    atlas: [
+      'A world of communities.',
+      'Discover streamer realms, then step inside their kingdoms.',
     ],
     world: [
       'A world worth fighting for.',
@@ -825,6 +918,7 @@ function Overview({ ctx }: { ctx: Context }) {
           />
           <div className="map-frame">
             <WorldMap
+              realmName={ctx.s.realm}
               territories={s.territories}
               compact
               onSelect={(id) => {
@@ -1261,9 +1355,25 @@ function WorldScreen({ ctx }: { ctx: Context }) {
     k = ctx.s.kingdoms.find((k) => k.id === t.owner)!;
   return (
     <div className="world-screen-grid">
+      <div className="realm-map-banner">
+        <div>
+          <span className="eyebrow">
+            {ctx.s.mode === 'simulation' ? 'SIMULATED STREAMER REALM' : 'YOUR CHANNEL REALM'}
+          </span>
+          <h2>{ctx.s.realm}</h2>
+          <p>
+            {ctx.s.mode === 'simulation' ? realmIdentity(ctx.s.realmId).streamer + ' · ' : ''}Three
+            kingdoms. One community. Its own persistent history.
+          </p>
+        </div>
+        <Button onClick={() => ctx.go('atlas')}>
+          <Compass size={15} />
+          Back to world atlas
+        </Button>
+      </div>
       <Panel className="full-map-panel">
         <PanelTitle
-          title="The atlas of Everfall"
+          title="Kingdoms and frontiers"
           action={
             <div className="button-row">
               <Button onClick={() => setList(!list)}>
@@ -1301,6 +1411,7 @@ function WorldScreen({ ctx }: { ctx: Context }) {
           <div className="map-zoom-container">
             <div style={{ width: `${zoom * 100}%` }}>
               <WorldMap
+                realmName={ctx.s.realm}
                 territories={ctx.s.territories}
                 selected={selected}
                 onSelect={setSelected}
@@ -1729,8 +1840,9 @@ function CitizensScreen({ ctx }: { ctx: Context }) {
     let active = true;
     const timer = setTimeout(
       () =>
-        request(
+        realmRequest(
           `/api/${ctx.s.mode}/characters?search=${encodeURIComponent(search)}&kingdom=${faction}&page=${page}`,
+          ctx.s.realmId ?? 'home',
         )
           .then((result) => {
             if (active) {
@@ -2229,7 +2341,10 @@ function CharacterScreen({ ctx }: { ctx: Context }) {
             <Button
               variant="ghost"
               onClick={() =>
-                void request(`/api/${ctx.s.mode}/characters/${c.id}/ledger`)
+                void realmRequest(
+                  `/api/${ctx.s.mode}/characters/${c.id}/ledger`,
+                  ctx.s.realmId ?? 'home',
+                )
                   .then(setLedger)
                   .catch((e) => ctx.notify(e.message))
               }
@@ -2758,8 +2873,8 @@ function LeaderboardScreen({ ctx }: { ctx: Context }) {
   useEffect(() => {
     let active = true;
     Promise.all([
-      request(`/api/${ctx.s.mode}/characters?page=0`),
-      request(`/api/${ctx.s.mode}/seasons`),
+      realmRequest(`/api/${ctx.s.mode}/characters?page=0`, ctx.s.realmId ?? 'home'),
+      realmRequest(`/api/${ctx.s.mode}/seasons`, ctx.s.realmId ?? 'home'),
     ])
       .then(([c, a]) => {
         if (active) {

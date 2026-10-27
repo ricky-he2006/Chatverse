@@ -1,3 +1,4 @@
+import { RealmRegistry, summarizeRealm } from './realms';
 import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
 import serveStatic from '@fastify/static';
@@ -12,7 +13,13 @@ import { World } from './world';
 import { RuleError } from './engine';
 import type { TwitchIntegration } from './twitch';
 
-type Session = { csrf: string; expires: number; kind: 'admin' | 'overlay'; mode?: Mode };
+type Session = {
+  csrf: string;
+  expires: number;
+  kind: 'admin' | 'overlay';
+  mode?: Mode;
+  realmId?: string;
+};
 const faction = z.enum(['north', 'east', 'west']);
 const commandSchema = z
   .object({
@@ -40,7 +47,7 @@ const equal = (a: string, b: string) => {
 export async function createApp(
   worlds: Record<Mode, World>,
   integration?: TwitchIntegration,
-  options: { bootstrap?: string; port?: number; test?: boolean } = {},
+  options: { bootstrap?: string; port?: number; test?: boolean; registry?: RealmRegistry } = {},
 ) {
   const app = Fastify({ logger: false, bodyLimit: 16384, requestTimeout: 15000 });
   await app.register(cookie);
@@ -54,6 +61,19 @@ export async function createApp(
     'http://127.0.0.1:5173',
   ]);
   const limits = new Map<string, { at: number; count: number }>();
+  const realmIdFor = (req: any): string =>
+    z
+      .string()
+      .regex(/^[a-z][a-z0-9-]{0,39}$/)
+      .parse(req.query?.realm ?? 'home');
+  const realmWorld = (mode: Mode, id: string) => {
+    if (options.registry) return options.registry.get(mode, id);
+    if (id !== 'home') throw new RuleError('Realm not found.', 'NOT_FOUND', 404);
+    return worlds[mode];
+  };
+  const simulationFor = (req: any) => realmWorld('simulation', realmIdFor(req));
+  const overlayCookie = (mode: string, id: string) =>
+    'cv_overlay_' + mode + (id === 'home' ? '' : '_' + id);
   const streamCounts: Record<Mode, number> = { simulation: 0, live: 0 };
   function reserveStream(mode: Mode) {
     if (streamCounts[mode] >= 8)
@@ -112,8 +132,9 @@ export async function createApp(
         req.url,
       );
       const overlayMode = req.url.split('/')[2];
+      const requestedRealm = realmIdFor(req);
       const session = sessions.get(
-        (overlayRoute ? req.cookies[`cv_overlay_${overlayMode}`] : undefined) ??
+        (overlayRoute ? req.cookies[overlayCookie(overlayMode, requestedRealm)] : undefined) ??
           req.cookies.cv_session ??
           '',
       );
@@ -127,7 +148,11 @@ export async function createApp(
         if (
           req.method !== 'GET' ||
           !new RegExp(`^/api/${session.mode}/overlay/(snapshot|events)(\\?|$)`).test(req.url) ||
-          !worlds[session.mode!].get('SELECT 1 FROM overlay_keys WHERE hash=?', session.csrf)
+          (session.realmId ?? 'home') !== requestedRealm ||
+          !realmWorld(session.mode!, requestedRealm).get(
+            'SELECT 1 FROM overlay_keys WHERE hash=?',
+            session.csrf,
+          )
         )
           throw new RuleError(
             'Overlay access is read-only or its key was revoked.',
@@ -154,14 +179,11 @@ export async function createApp(
         .send({ code: error.code, message: error.message, requestId: req.id });
     const status = error instanceof Error && 'statusCode' in error ? error.statusCode : undefined;
     if (typeof status === 'number' && status >= 400 && status < 500)
-      return reply
-        .code(status)
-        .send({
-          code: 'INVALID_REQUEST',
-          message:
-            status === 413 ? 'Request body is too large.' : 'The request could not be parsed.',
-          requestId: req.id,
-        });
+      return reply.code(status).send({
+        code: 'INVALID_REQUEST',
+        message: status === 413 ? 'Request body is too large.' : 'The request could not be parsed.',
+        requestId: req.id,
+      });
     console.error(`[${req.id}]`, error instanceof Error ? error.message : 'Unexpected failure');
     return reply.code(500).send({
       code: 'INTERNAL_ERROR',
@@ -169,10 +191,13 @@ export async function createApp(
       requestId: req.id,
     });
   });
-  const worldFor = (req: any) => worlds[z.enum(['simulation', 'live']).parse(req.params.mode)];
+  const worldFor = (req: any) =>
+    realmWorld(z.enum(['simulation', 'live']).parse(req.params.mode), realmIdFor(req));
   const streamAuthorized = (req: any, mode: Mode, overlay = false) => {
     const id =
-      (overlay ? req.cookies[`cv_overlay_${mode}`] : undefined) ?? req.cookies.cv_session ?? '';
+      (overlay ? req.cookies[overlayCookie(mode, realmIdFor(req))] : undefined) ??
+      req.cookies.cv_session ??
+      '';
     const session = sessions.get(id);
     return () =>
       !!session &&
@@ -181,7 +206,11 @@ export async function createApp(
       (session.kind === 'admin' ||
         (overlay &&
           session.mode === mode &&
-          !!worlds[mode].get('SELECT 1 FROM overlay_keys WHERE hash=?', session.csrf)));
+          (session.realmId ?? 'home') === realmIdFor(req) &&
+          !!realmWorld(mode, realmIdFor(req)).get(
+            'SELECT 1 FROM overlay_keys WHERE hash=?',
+            session.csrf,
+          )));
   };
   app.get('/api/health', async () => ({
     ok: true,
@@ -227,6 +256,19 @@ export async function createApp(
     sessions.delete(req.cookies.cv_session ?? '');
     reply.clearCookie('cv_session', { path: '/' });
     return { ok: true };
+  });
+  app.get('/api/:mode/atlas', async (req) => {
+    const mode = z.enum(['simulation', 'live']).parse((req.params as any).mode),
+      id = realmIdFor(req);
+    if (options.registry) return options.registry.atlas(mode, id);
+    const world = realmWorld(mode, id);
+    return {
+      mode,
+      currentRealm: id,
+      source: mode === 'simulation' ? 'local-simulation' : 'local-live',
+      now: world.now(),
+      realms: [summarizeRealm(world, id)],
+    };
   });
   app.get('/api/:mode/snapshot', async (req) => {
     const q = z.object({ persona: z.string().optional() }).parse(req.query);
@@ -366,7 +408,7 @@ export async function createApp(
       })
       .strict()
       .parse(req.body);
-    worlds.simulation.reset(scenario);
+    simulationFor(req).reset(scenario);
     return { ok: true };
   });
   app.post('/api/simulation/advance', async (req) => {
@@ -380,7 +422,7 @@ export async function createApp(
       })
       .strict()
       .parse(req.body);
-    worlds.simulation.advance(seconds);
+    simulationFor(req).advance(seconds);
     return { ok: true };
   });
   app.post('/api/simulation/welcome', async (req) => {
@@ -392,7 +434,7 @@ export async function createApp(
       })
       .strict()
       .parse(req.body);
-    const world = worlds.simulation;
+    const world = simulationFor(req);
     world.atomic(() => {
       for (let i = 0; i < body.count; i++)
         world.command(
@@ -406,8 +448,8 @@ export async function createApp(
     });
     return { ok: true };
   });
-  app.post('/api/simulation/populate-chapter', async () => {
-    worlds.simulation.simulatePledges();
+  app.post('/api/simulation/populate-chapter', async (req) => {
+    simulationFor(req).simulatePledges();
     return { ok: true };
   });
   app.get('/api/:mode/events', async (req, reply) => {
@@ -457,21 +499,32 @@ export async function createApp(
       w.run('DELETE FROM overlay_keys');
       w.run('INSERT INTO overlay_keys VALUES (?,?)', digest(key), w.now());
     });
-    return { key, url: `http://localhost:${port}/overlay/${w.mode}#key=${key}` };
+    return {
+      key,
+      url: `http://localhost:${port}/overlay/${w.mode}${w.realmId === 'home' ? '' : '?realm=' + w.realmId}#key=${key}`,
+    };
   });
   app.delete('/api/:mode/overlay/keys', async (req) => {
     const w = worldFor(req);
     w.atomic(() => w.run('DELETE FROM overlay_keys'));
     for (const [id, s] of sessions)
-      if (s.kind === 'overlay' && s.mode === w.mode) sessions.delete(id);
+      if (s.kind === 'overlay' && s.mode === w.mode && (s.realmId ?? 'home') === w.realmId)
+        sessions.delete(id);
     return { ok: true };
   });
   app.post('/api/overlay/exchange', async (req, reply) => {
-    const { mode, key } = z
-      .object({ mode: z.enum(['live', 'simulation']), key: z.string().min(20).max(100) })
+    const { mode, key, realm } = z
+      .object({
+        mode: z.enum(['live', 'simulation']),
+        key: z.string().min(20).max(100),
+        realm: z
+          .string()
+          .regex(/^[a-z][a-z0-9-]{0,39}$/)
+          .default('home'),
+      })
       .strict()
       .parse(req.body);
-    if (!worlds[mode].get('SELECT 1 FROM overlay_keys WHERE hash=?', digest(key)))
+    if (!realmWorld(mode, realm).get('SELECT 1 FROM overlay_keys WHERE hash=?', digest(key)))
       throw new RuleError(
         'This overlay key is invalid or revoked. Create a new one in Settings.',
         'UNAUTHORIZED',
@@ -481,10 +534,11 @@ export async function createApp(
     sessions.set(id, {
       kind: 'overlay',
       mode,
+      realmId: realm,
       csrf: digest(key),
       expires: Date.now() + 24 * 3600000,
     });
-    reply.setCookie(`cv_overlay_${mode}`, id, {
+    reply.setCookie(overlayCookie(mode, realm), id, {
       path: '/api',
       sameSite: 'lax',
       httpOnly: true,
@@ -492,11 +546,12 @@ export async function createApp(
     });
     return { ok: true };
   });
-  const overlaySnapshot = (mode: Mode) => {
-    const w = worlds[mode],
+  const overlaySnapshot = (w: World) => {
+    const mode = w.mode,
       s = w.snapshot();
     return {
       mode,
+      realmId: w.realmId,
       generation: s.generation,
       now: s.now,
       realm: s.realm,
@@ -507,9 +562,7 @@ export async function createApp(
       integration: { connected: s.integration.connected, state: s.integration.state },
     };
   };
-  app.get('/api/:mode/overlay/snapshot', async (req) =>
-    overlaySnapshot(z.enum(['live', 'simulation']).parse((req.params as any).mode)),
-  );
+  app.get('/api/:mode/overlay/snapshot', async (req) => overlaySnapshot(worldFor(req)));
   app.get('/api/:mode/overlay/events', async (req, reply) => {
     const w = worldFor(req),
       authorized = streamAuthorized(req, w.mode, true);
@@ -528,7 +581,7 @@ export async function createApp(
         return;
       }
       if (blocked) return;
-      blocked = !reply.raw.write(`data: ${JSON.stringify(overlaySnapshot(w.mode))}\n\n`);
+      blocked = !reply.raw.write(`data: ${JSON.stringify(overlaySnapshot(w))}\n\n`);
     };
     reply.raw.on('drain', () => {
       blocked = false;
@@ -578,7 +631,7 @@ export async function createApp(
       .object({ tier: z.number().int().min(0).max(3) })
       .strict()
       .parse(req.body);
-    worlds.simulation.setSimulationSupporter(
+    simulationFor(req).setSimulationSupporter(
       (req.params as { id: string }).id,
       tier as 0 | 1 | 2 | 3,
     );

@@ -4,6 +4,7 @@ import type { Chapter, Kingdom, Mode, WorldEvent } from '../shared/types';
 import { FACTIONS } from '../shared/catalog';
 import { Crest } from './WorldMap';
 import { countdown } from './ui';
+import { realmUrl } from './api';
 type Projection = {
   mode: Mode;
   generation: string;
@@ -17,6 +18,7 @@ type Projection = {
 };
 export function Overlay() {
   const mode: Mode = location.pathname.split('/')[2] === 'live' ? 'live' : 'simulation';
+  const realm = new URLSearchParams(location.search).get('realm') ?? 'home';
   const [data, setData] = useState<Projection | null>(null),
     [error, setError] = useState(''),
     [tick, setTick] = useState(Date.now()),
@@ -35,20 +37,20 @@ export function Overlay() {
           const response = await fetch('/api/overlay/exchange', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ mode, key }),
+            body: JSON.stringify({ mode, key, realm }),
           });
           const body = await response.json();
           if (!response.ok) throw new Error(body.message);
-          history.replaceState(null, '', location.pathname);
+          history.replaceState(null, '', location.pathname + location.search);
         }
-        const snapshot = await fetch(`/api/${mode}/overlay/snapshot`),
+        const snapshot = await fetch(realmUrl(`/api/${mode}/overlay/snapshot`, realm)),
           body = await snapshot.json();
         if (!snapshot.ok) throw new Error(body.message);
         if (cancelled) return;
         setData(body);
         offset.current = body.now - Date.now();
         cursor.current = body.events[0]?.id ?? 0;
-        events = new EventSource(`/api/${mode}/overlay/events`);
+        events = new EventSource(realmUrl(`/api/${mode}/overlay/events`, realm));
         events.onmessage = (e) => {
           const next: Projection = JSON.parse(e.data);
           setData(next);
@@ -81,7 +83,7 @@ export function Overlay() {
       if (noticeTimer.current) clearTimeout(noticeTimer.current);
       document.body.classList.remove('overlay-body');
     };
-  }, [mode]);
+  }, [mode, realm]);
   const now = tick + offset.current,
     ch = data?.chapter;
   const active =
@@ -102,7 +104,7 @@ export function Overlay() {
         <div className="obs-campaign">
           <div className="obs-eyebrow">
             <Crown size={13} />
-            CHATVERSE · {ch.territory.replaceAll('-', ' ').toUpperCase()}
+            {data.realm.toUpperCase()} · {ch.territory.replaceAll('-', ' ').toUpperCase()}
           </div>
           <div className="obs-matchup">
             <div>
