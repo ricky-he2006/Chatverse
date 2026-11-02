@@ -1,3 +1,5 @@
+import { localSpeech } from './herald';
+import { ACCEPTED_MOMENTS } from '../shared/stream-moments';
 import { RealmRegistry, summarizeRealm } from './realms';
 import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
@@ -12,6 +14,8 @@ import { SCENARIOS } from '../shared/catalog';
 import { World } from './world';
 import { RuleError } from './engine';
 import type { TwitchIntegration } from './twitch';
+import { Companion } from './companion';
+import { WorldTasks } from './world-tasks';
 
 type Session = {
   csrf: string;
@@ -47,7 +51,13 @@ const equal = (a: string, b: string) => {
 export async function createApp(
   worlds: Record<Mode, World>,
   integration?: TwitchIntegration,
-  options: { bootstrap?: string; port?: number; test?: boolean; registry?: RealmRegistry } = {},
+  options: {
+    bootstrap?: string;
+    port?: number;
+    test?: boolean;
+    registry?: RealmRegistry;
+    tasksDirectory?: string;
+  } = {},
 ) {
   const app = Fastify({ logger: false, bodyLimit: 16384, requestTimeout: 15000 });
   await app.register(cookie);
@@ -74,6 +84,12 @@ export async function createApp(
   const simulationFor = (req: any) => realmWorld('simulation', realmIdFor(req));
   const overlayCookie = (mode: string, id: string) =>
     'cv_overlay_' + mode + (id === 'home' ? '' : '_' + id);
+  const readSessionId = (req: any, mode?: string) => {
+    const adminId = req.cookies.cv_session ?? '';
+    const admin = sessions.get(adminId);
+    if (admin?.kind === 'admin' && admin.expires > Date.now()) return adminId;
+    return (mode ? req.cookies[overlayCookie(mode, realmIdFor(req))] : undefined) ?? adminId;
+  };
   const streamCounts: Record<Mode, number> = { simulation: 0, live: 0 };
   function reserveStream(mode: Mode) {
     if (streamCounts[mode] >= 8)
@@ -93,6 +109,8 @@ export async function createApp(
   }
   app.addHook('onRequest', async (req, reply) => {
     const rawPath = req.url.split('?')[0];
+    if (rawPath.startsWith('/api/') || rawPath.startsWith('/auth/'))
+      reply.header('Cache-Control', 'no-store');
     if (
       rawPath.includes('%') ||
       rawPath.includes('\\') ||
@@ -127,17 +145,13 @@ export async function createApp(
       (rawPath === '/api/health' && ['GET', 'HEAD'].includes(req.method)) ||
       (rawPath === '/api/session' && ['GET', 'HEAD', 'POST'].includes(req.method)) ||
       (rawPath === '/api/overlay/exchange' && req.method === 'POST');
-    if (req.url.startsWith('/api/') && !publicApi) {
+    if (req.url.startsWith('/api/') && !publicApi && !rawPath.startsWith('/api/companion/')) {
       const overlayRoute = /^\/api\/(live|simulation)\/overlay\/(snapshot|events)(\?|$)/.test(
         req.url,
       );
       const overlayMode = req.url.split('/')[2];
       const requestedRealm = realmIdFor(req);
-      const session = sessions.get(
-        (overlayRoute ? req.cookies[overlayCookie(overlayMode, requestedRealm)] : undefined) ??
-          req.cookies.cv_session ??
-          '',
-      );
+      const session = sessions.get(readSessionId(req, overlayRoute ? overlayMode : undefined));
       if (!session || session.expires < Date.now())
         throw new RuleError(
           'Unlock this local dashboard with the code printed in the server terminal.',
@@ -193,11 +207,134 @@ export async function createApp(
   });
   const worldFor = (req: any) =>
     realmWorld(z.enum(['simulation', 'live']).parse(req.params.mode), realmIdFor(req));
+  const competitions = new WorldTasks(
+    options.tasksDirectory,
+    Date.now,
+    () => worlds.live.setting('realm') ?? 'Authorized community',
+    () => worlds.live.setting('supporterChannel') ?? '',
+  );
+  app.addHook('onClose', () => competitions.close());
+  const companion = new Companion(realmWorld, port, competitions);
+  await companion.register(app);
+  app.get('/api/:mode/world-tasks', async (req) =>
+    competitions.snapshot(z.enum(['simulation', 'live']).parse((req.params as any).mode)),
+  );
+  app.post('/api/:mode/world-tasks', async (req) => {
+    const body = z
+      .object({
+        game: z.string().trim().min(1).max(60),
+        title: z.string().trim().min(1).max(100),
+        objective: z.string().trim().min(10).max(1000),
+        unit: z.enum(['members', 'teams', 'single']),
+        target: z.number().int().min(1).max(100),
+        hours: z.number().int().min(1).max(168),
+        requireStreamer: z.boolean().default(true),
+      })
+      .strict()
+      .parse(req.body);
+    return competitions.create(
+      z.enum(['simulation', 'live']).parse((req.params as any).mode),
+      body,
+    );
+  });
+  app.get('/api/:mode/world-tasks/proofs', async (req) =>
+    competitions.reviewQueue(z.enum(['simulation', 'live']).parse((req.params as any).mode)),
+  );
+  app.post('/api/:mode/world-tasks/:id/streamer-proof', { bodyLimit: 7500000 }, async (req) => {
+    const mode = z.enum(['simulation', 'live']).parse((req.params as any).mode),
+      w = worldFor(req),
+      channel = w.setting('supporterChannel');
+    if (mode === 'live' && (!w.integration().connected || !channel))
+      throw new RuleError('Connect the authorized streamer channel first.', 'REALM_OFFLINE', 503);
+    const body = z
+      .object({ note: z.string().trim().min(5).max(1000), image: z.string().min(1).max(7000000) })
+      .strict()
+      .parse(req.body);
+    return competitions.submit(
+      mode,
+      (req.params as any).id,
+      {
+        realm: w.realmId,
+        subject: mode === 'live' ? 'twitch:' + channel : 'streamer:' + w.realmId,
+        generation: w.get('SELECT generation FROM environment')!.generation,
+        name:
+          mode === 'live'
+            ? (w.integration().channel ?? 'Authorized streamer')
+            : 'Simulated ' + w.realmId + ' streamer',
+        role: 'streamer',
+        channel: channel ?? null,
+      },
+      body.note,
+      body.image,
+    );
+  });
+  app.get('/api/:mode/world-tasks/proofs/:id/image', async (req, reply) => {
+    const image = competitions.image(
+      z.enum(['simulation', 'live']).parse((req.params as any).mode),
+      (req.params as any).id,
+    );
+    return reply
+      .type(image.mime)
+      .header('Content-Security-Policy', "default-src 'none'; sandbox")
+      .send(image.bytes);
+  });
+  app.post('/api/:mode/world-tasks/proofs/:id/review', async (req) => {
+    const body = z
+      .object({
+        decision: z.enum(['approved', 'rejected']),
+        reason: z.string().trim().min(5).max(500),
+      })
+      .strict()
+      .parse(req.body);
+    return competitions.review(
+      z.enum(['simulation', 'live']).parse((req.params as any).mode),
+      (req.params as any).id,
+      body.decision,
+      body.reason,
+    );
+  });
+  app.post('/api/:mode/world-tasks/:id/finalize', async (req) =>
+    competitions.finalize(
+      z.enum(['simulation', 'live']).parse((req.params as any).mode),
+      (req.params as any).id,
+    ),
+  );
+  app.post('/api/simulation/world-tasks/advance', async (req) =>
+    competitions.advanceSimulation(
+      z
+        .object({ hours: z.number().int().min(1).max(72) })
+        .strict()
+        .parse(req.body).hours,
+    ),
+  );
+  app.post('/api/:mode/companion/previews', async (req) => {
+    const { characterId } = z
+      .object({ characterId: z.string().min(1).max(100) })
+      .strict()
+      .parse(req.body);
+    return companion.mintPreview(worldFor(req), characterId);
+  });
+  app.delete('/api/:mode/companion/previews', async (req) => {
+    companion.revokePreviews(worldFor(req));
+    return { ok: true };
+  });
+  app.get('/api/:mode/proposals', async (req) => worldFor(req).proposals());
+  app.post('/api/:mode/proposals/:id/review', async (req) => {
+    const body = z
+      .object({
+        action: z.enum(['accept', 'dismiss']),
+        reason: z.string().trim().max(180).default(''),
+      })
+      .strict()
+      .parse(req.body);
+    return worldFor(req).reviewProposal(
+      (req.params as { id: string }).id,
+      body.action,
+      body.reason,
+    );
+  });
   const streamAuthorized = (req: any, mode: Mode, overlay = false) => {
-    const id =
-      (overlay ? req.cookies[overlayCookie(mode, realmIdFor(req))] : undefined) ??
-      req.cookies.cv_session ??
-      '';
+    const id = readSessionId(req, overlay ? mode : undefined);
     const session = sessions.get(id);
     return () =>
       !!session &&
@@ -359,6 +496,7 @@ export async function createApp(
         autoChapters: z.boolean().optional(),
         chatOutput: z.boolean().optional(),
         aiEnabled: z.boolean().optional(),
+        herald: z.object({enabled:z.boolean(),volume:z.number().min(0).max(1),frequency:z.enum(['major','balanced'])}).strict().optional(),
         tone: z.enum(['heroic', 'cozy', 'dry']).optional(),
       })
       .strict()
@@ -368,23 +506,39 @@ export async function createApp(
     return w.updateSettings(patch);
   });
   app.post('/api/:mode/milestone', async (req) => {
-    const { milestone } = z
+    const { milestone, actionId, generation } = z
       .object({
-        milestone: z.enum(['A hard-earned victory', 'A brave attempt', 'A new personal best']),
+        milestone: z.enum(ACCEPTED_MOMENTS),
+        actionId: z.string().uuid().optional(),
+        generation: z.string().uuid().optional(),
       })
       .strict()
       .parse(req.body);
     const w = worldFor(req);
-    w.atomic(() =>
-      w.event(
+    const key = actionId ?? z.string().min(8).max(150).parse(req.headers['idempotency-key']);
+    return w.atomic(() => {
+      const current = w.get('SELECT generation FROM environment WHERE id=1')!.generation;
+      if (generation && current !== generation)
+        throw new RuleError('The world changed. Choose the moment again.', 'STALE', 409);
+      const receipt = `milestone:${current}:${w.setting('supporterChannel') ?? ''}:${key}`;
+      const saved = w.get('SELECT result FROM receipts WHERE key=?', receipt);
+      if (saved) {
+        const previous = JSON.parse(saved.result);
+        if (previous.milestone !== milestone)
+          throw new RuleError('This action already recorded another moment.', 'CONFLICT', 409);
+        return previous;
+      }
+      const eventId = w.event(
         'milestone',
-        'From the streamer’s adventure',
+        milestone,
         `${milestone} — confirmed by the streamer. This is story context, not automatic game telemetry or a combat bonus.`,
         null,
         'streamer',
-      ),
-    );
-    return { ok: true };
+      );
+      const result = { ok: true, eventId, milestone };
+      w.run('INSERT INTO receipts VALUES (?,?,?)', receipt, JSON.stringify(result), w.now());
+      return result;
+    });
   });
   app.post('/api/:mode/announcement', async (req) => {
     const { text } = z
@@ -449,8 +603,19 @@ export async function createApp(
     return { ok: true };
   });
   app.post('/api/simulation/populate-chapter', async (req) => {
-    simulationFor(req).simulatePledges();
+    const { chapterId } = z
+      .object({ chapterId: z.string().uuid().optional() })
+      .strict()
+      .parse(req.body ?? {});
+    simulationFor(req).simulatePledges(chapterId);
     return { ok: true };
+  });
+  app.post('/api/simulation/chapters/:id/complete', async (req) => {
+    const id = z
+      .string()
+      .uuid()
+      .parse((req.params as any).id);
+    return simulationFor(req).completeSimulationBattle(id);
   });
   app.get('/api/:mode/events', async (req, reply) => {
     const w = worldFor(req),
@@ -559,10 +724,25 @@ export async function createApp(
       chapter: s.chapter,
       events: s.settings.quiet ? [] : s.events.slice(0, 3),
       quiet: s.settings.quiet,
+      herald: s.settings.herald,
+      heraldLines: w.all('SELECT event_id id,text,priority,created_at at FROM herald_events ORDER BY event_id DESC LIMIT 30'),
       integration: { connected: s.integration.connected, state: s.integration.state },
     };
   };
-  app.get('/api/:mode/overlay/snapshot', async (req) => overlaySnapshot(worldFor(req)));
+  app.get('/api/:mode/overlay/snapshot', async (req, reply) => {
+    const w=worldFor(req), q=req.query as Record<string,string>;
+    if(q.heraldAudio) {
+      const id=z.coerce.number().int().positive().parse(q.heraldAudio);
+      if(q.generation!==w.get('SELECT generation FROM environment WHERE id=1')!.generation || !w.settings().herald?.enabled || w.settings().quiet) return reply.code(409).send({message:'Herald inactive or world changed'});
+      const row=w.get('SELECT text FROM herald_events WHERE event_id=? AND created_at>?',id,w.now()-30000);
+      if(!row) return reply.code(404).send({message:'Announcement expired'});
+      const audio=await localSpeech(row.text);
+      if(!streamAuthorized(req,w.mode,true)() || q.generation!==w.get('SELECT generation FROM environment WHERE id=1')!.generation || !w.settings().herald?.enabled || w.settings().quiet) return reply.code(409).send({message:'Herald inactive or authorization changed'});
+      if(!audio)return reply.code(503).send({message:'Local voice unavailable; use captions'});
+      return reply.header('Cache-Control','no-store').type('audio/wav').send(audio);
+    }
+    return overlaySnapshot(w);
+  });
   app.get('/api/:mode/overlay/events', async (req, reply) => {
     const w = worldFor(req),
       authorized = streamAuthorized(req, w.mode, true);

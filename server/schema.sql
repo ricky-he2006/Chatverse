@@ -1,4 +1,18 @@
 PRAGMA foreign_keys=ON;
+CREATE TABLE IF NOT EXISTS territory_development(territory_id TEXT PRIMARY KEY REFERENCES territories(id),level INTEGER NOT NULL CHECK(level BETWEEN 1 AND 3));
+CREATE TABLE IF NOT EXISTS chapter_proposals (
+  id TEXT PRIMARY KEY,
+  character_id TEXT NOT NULL REFERENCES characters(id),
+  kingdom TEXT NOT NULL REFERENCES kingdoms(id),
+  territory TEXT NOT NULL REFERENCES territories(id),
+  session TEXT NOT NULL,
+  status TEXT NOT NULL CHECK(status IN('pending','accepted','dismissed')),
+  reason TEXT,
+  created_at INTEGER NOT NULL,
+  chapter_id TEXT REFERENCES chapters(id),
+  UNIQUE(character_id,session)
+);
+CREATE INDEX IF NOT EXISTS proposals_kingdom_created ON chapter_proposals(kingdom,created_at DESC);
 CREATE TABLE IF NOT EXISTS supporter_status (character_id TEXT PRIMARY KEY REFERENCES characters(id),broadcaster_id TEXT NOT NULL,tier INTEGER NOT NULL CHECK(tier BETWEEN 0 AND 3),gifted INTEGER NOT NULL CHECK(gifted IN(0,1)),verified_at INTEGER NOT NULL,source TEXT NOT NULL CHECK(source IN('simulation','twitch')));
 CREATE TABLE IF NOT EXISTS kingdom_growth (kingdom TEXT PRIMARY KEY REFERENCES kingdoms(id),high_water INTEGER NOT NULL CHECK(high_water>=0));
 CREATE TABLE IF NOT EXISTS challenges (id TEXT PRIMARY KEY,template TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'open',winner_id TEXT,opened_at INTEGER NOT NULL,expires_at INTEGER NOT NULL,completed_at INTEGER);
@@ -18,6 +32,7 @@ CREATE TABLE IF NOT EXISTS receipts (key TEXT PRIMARY KEY,result TEXT NOT NULL,c
 CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY AUTOINCREMENT,type TEXT NOT NULL,title TEXT NOT NULL,body TEXT NOT NULL,source TEXT NOT NULL,kingdom TEXT,created_at INTEGER NOT NULL,narrative_source TEXT NOT NULL DEFAULT 'template');
 CREATE TABLE IF NOT EXISTS chapters (id TEXT PRIMARY KEY,attacker TEXT NOT NULL REFERENCES kingdoms(id),defender TEXT NOT NULL REFERENCES kingdoms(id),territory TEXT NOT NULL REFERENCES territories(id),status TEXT NOT NULL CHECK(status IN('open','paused','resolved','cancelled')),deadline INTEGER NOT NULL,remaining INTEGER,seed INTEGER NOT NULL,created_at INTEGER NOT NULL,resolved_at INTEGER,input TEXT,result TEXT);
 CREATE UNIQUE INDEX IF NOT EXISTS one_active_chapter ON chapters((1)) WHERE status IN('open','paused');
+CREATE TABLE IF NOT EXISTS chapter_broadcasts (chapter_id TEXT PRIMARY KEY REFERENCES chapters(id),opening_event_id INTEGER UNIQUE REFERENCES events(id),resumed_at INTEGER);
 CREATE TABLE IF NOT EXISTS participants (chapter_id TEXT NOT NULL REFERENCES chapters(id),character_id TEXT NOT NULL REFERENCES characters(id),kingdom TEXT NOT NULL REFERENCES kingdoms(id),created_at INTEGER NOT NULL,PRIMARY KEY(chapter_id,character_id));
 CREATE TABLE IF NOT EXISTS votes (chapter_id TEXT NOT NULL,character_id TEXT NOT NULL,tactic TEXT NOT NULL CHECK(tactic IN('attack','defend','raid')),created_at INTEGER NOT NULL,PRIMARY KEY(chapter_id,character_id),FOREIGN KEY(chapter_id,character_id) REFERENCES participants(chapter_id,character_id));
 CREATE TABLE IF NOT EXISTS elections (id TEXT PRIMARY KEY,kingdom TEXT NOT NULL REFERENCES kingdoms(id),status TEXT NOT NULL CHECK(status IN('nominating','voting','closed')),nomination_end INTEGER NOT NULL,deadline INTEGER NOT NULL,winner TEXT REFERENCES characters(id),reason TEXT,created_at INTEGER NOT NULL);
@@ -34,3 +49,5 @@ CREATE INDEX IF NOT EXISTS characters_faction ON characters(kingdom,contribution
 CREATE INDEX IF NOT EXISTS pending_narratives ON narrative_jobs(status,event_id);
 CREATE INDEX IF NOT EXISTS events_recent ON events(created_at DESC);
 CREATE INDEX IF NOT EXISTS chapter_history ON chapters(created_at DESC);
+
+CREATE TABLE IF NOT EXISTS herald_events(event_id INTEGER PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE,text TEXT NOT NULL,priority INTEGER NOT NULL,created_at INTEGER NOT NULL);

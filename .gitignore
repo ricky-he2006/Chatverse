@@ -1,9 +1,38 @@
+## Dependencies and generated build output
 node_modules/
 dist/
+.vite/
+coverage/
+test-results/
+playwright-report/
+
+## Local application state, credentials, and backups
 data/
 .env
 .env.*
 !.env.example
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+*.dpapi
+*.pem
+*.key
+*.p12
+*.pfx
+
+## Logs and operating-system/editor files
 *.log
-test-results/
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
 .DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/
+
+## Private source/reference media and generated local TTS sample
+docs/assets/chatverse-reference.png
+docs/screenshots/final-release/herald-voice-check.wav
+docs/screenshots/final-release/live-connected-check.jpg

@@ -76,14 +76,12 @@ export function WorldAtlas({
   const inspectRealm = (id: string, showDetail = false) => {
     setSelected(id);
     if (showDetail)
-      document
-        .getElementById('atlas-realm-detail')
-        ?.scrollIntoView({
-          behavior: window.matchMedia('(prefers-reduced-motion:reduce)').matches
-            ? 'instant'
-            : 'smooth',
-          block: 'start',
-        });
+      document.getElementById('atlas-realm-detail')?.scrollIntoView({
+        behavior: window.matchMedia('(prefers-reduced-motion:reduce)').matches
+          ? 'instant'
+          : 'smooth',
+        block: 'start',
+      });
   };
   return (
     <div className="atlas-page">
@@ -155,7 +153,12 @@ export function WorldAtlas({
         <Panel
           id="atlas-realm-detail"
           className={'atlas-inspector theme-' + current.theme}
-          style={{ '--realm-accent': current.color } as CSSProperties}
+          style={
+            {
+              '--realm-accent': current.color,
+              '--realm-map-image': `url("${current.mapImage}")`,
+            } as CSSProperties
+          }
         >
           <div className="atlas-realm-art">
             <span className="atlas-large-sigil">{current.sigil}</span>
@@ -251,7 +254,12 @@ export function WorldAtlas({
           <article
             key={r.id}
             className={'realm-card theme-' + r.theme + (r.id === realmId ? ' current-realm' : '')}
-            style={{ '--realm-accent': r.color } as CSSProperties}
+            style={
+              {
+                '--realm-accent': r.color,
+                '--realm-map-image': `url("${r.mapImage}")`,
+              } as CSSProperties
+            }
           >
             <button
               className="realm-card-cover"

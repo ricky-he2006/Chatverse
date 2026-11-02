@@ -6,6 +6,7 @@ import { RuleError } from './engine';
 import { disconnected, World } from './world';
 import { TokenVault } from './vault';
 import { twitchTier, type SupporterTier } from '../shared/supporters';
+import { formatPersonalRecap, personalRecap } from './personal-recap';
 
 type Grant = {
   access_token: string;
@@ -37,7 +38,7 @@ export class TwitchIntegration {
   private cooldowns = new Map<string, number>();
   private sends: number[] = [];
   private sending = false;
-  private queue: { body: string; expires: number; outboxId?: number }[] = [];
+  private queue: { body: string; expires: number; outboxId?: number; priority?: number }[] = [];
   private replyTimer: ReturnType<typeof setInterval>;
   private supporterTimer: ReturnType<typeof setInterval>;
   private supporterSync: Promise<{ updated: number; verifiedAt: number }> | null = null;
@@ -54,7 +55,7 @@ export class TwitchIntegration {
     private vault: TokenVault,
   ) {
     this.status.configured = !!process.env.TWITCH_CLIENT_ID && !!process.env.TWITCH_CLIENT_SECRET;
-    world.integration = () => ({ ...this.status });
+    world.integration = () => ({ ...this.status, lastAcceptedJoin: this.acceptedJoin() });
     this.replyTimer = setInterval(() => void this.flush().catch(() => {}), 3000);
     this.replyTimer.unref();
     this.supporterTimer = setInterval(() => this.queueSupporterSync(), 600000);
@@ -63,6 +64,29 @@ export class TwitchIntegration {
   private update(patch: Partial<IntegrationStatus>) {
     Object.assign(this.status, patch);
     this.world.notifyChange();
+  }
+  private acceptedJoin() {
+    if (!this.status.connected || !this.grant) return null;
+    const proof = JSON.parse(this.world.setting('acceptedTwitchJoin') ?? 'null') as {
+      channel: string;
+      generation: string;
+      character: string;
+      key: string;
+      at: number;
+    } | null;
+    if (
+      !proof ||
+      proof.channel !== this.grant.userId ||
+      proof.generation !==
+        this.world.get('SELECT generation FROM environment WHERE id=1')!.generation
+    )
+      return null;
+    if (!this.world.get('SELECT 1 FROM receipts WHERE key=?', proof.key)) return null;
+    const c = this.world.get(
+      'SELECT name,kingdom FROM characters JOIN users ON users.id=characters.user_id WHERE characters.id=?',
+      proof.character,
+    );
+    return c ? { name: c.name as string, kingdom: c.kingdom as Faction, at: proof.at } : null;
   }
   async initialize() {
     if (!this.status.configured) return;
@@ -441,9 +465,30 @@ export class TwitchIntegration {
     if (!mutating.includes(verb) && !reads.includes(verb)) return;
     const key = `twitch:${this.grant!.userId}:${event.message_id}`;
     if (this.world.get('SELECT 1 FROM receipts WHERE key=?', key)) return;
-    const cooldownKey = `${event.chatter_user_id}:${mutating.includes(verb) ? 'write' : 'read'}`;
-    if ((this.cooldowns.get(cooldownKey) ?? 0) > Date.now()) return;
-    this.cooldowns.set(cooldownKey, Date.now() + (mutating.includes(verb) ? 2000 : 10000));
+    const write = mutating.includes(verb);
+    const interval = write ? 2000 : 10000;
+    const burst = write ? 4 : 3;
+    const now = Date.now();
+    const cooldownKey = `${event.chatter_user_id}:${write ? 'write' : 'read'}`;
+    // Allow a new citizen's join → class → pledge → vote burst at the same sustained rate.
+    const nextSlot = Math.max(this.cooldowns.get(cooldownKey) ?? now, now);
+    const wait = nextSlot - now - (burst - 1) * interval;
+    if (wait > 0) {
+      const message = `Command not recorded. Try again in ${Math.ceil(wait / 1000)}s.`;
+      this.world.run(
+        'INSERT INTO receipts VALUES (?,?,?)',
+        key,
+        JSON.stringify({ rejected: true, message }),
+        this.world.now(),
+      );
+      const warningKey = event.chatter_user_id + ':retry';
+      if ((this.cooldowns.get(warningKey) ?? 0) <= now) {
+        this.cooldowns.set(warningKey, now + 10000);
+        this.enqueue(`@${safeName(event.chatter_user_login ?? 'Citizen')} ${message}`);
+      }
+      return;
+    }
+    this.cooldowns.set(cooldownKey, nextSlot + interval);
     if (this.cooldowns.size > 10000)
       for (const [id, time] of this.cooldowns) if (time < Date.now()) this.cooldowns.delete(id);
     const actor = {
@@ -452,12 +497,23 @@ export class TwitchIntegration {
     };
     let message = '';
     try {
-      if (mutating.includes(verb)) {
-        message = this.world.command(
+      if (write) {
+        const result = this.world.command(
           actor,
           { type: verb as Command['type'], argument: parts.join(' ') },
           key,
-        ).message;
+        );
+        message = result.message;
+        if (verb === 'join' && result.characterId) {
+          this.world.set('acceptedTwitchJoin', {
+            channel: this.grant!.userId,
+            generation: this.world.get('SELECT generation FROM environment WHERE id=1')!.generation,
+            character: result.characterId,
+            key,
+            at: this.world.now(),
+          });
+          this.world.notifyChange();
+        }
         if (verb === 'join' && this.status.subscriptions) this.queueSupporterSync();
       } else {
         const c = this.world.get(
@@ -478,6 +534,8 @@ export class TwitchIntegration {
           if (!c) throw new RuleError('Begin with !join north, east or west.');
           const hero = this.world.character(c.id);
           message = `${hero.name} · Lv ${hero.level} ${hero.class} · ${hero.kingdom} · ${hero.xp} XP · ${hero.gold} gold · ATK ${hero.stats.attack} / DEF ${hero.stats.defense}.`;
+          if (verb === 'profile')
+            message += ' ' + formatPersonalRecap(personalRecap(this.world, hero));
         } else if (verb === 'shop')
           message = ITEMS.map((i) => `${i.id} (${i.cost}g)`).join(' · ') + ' · !buy item-id';
         else if (verb === 'inventory') {
@@ -527,15 +585,47 @@ export class TwitchIntegration {
         error instanceof RuleError
           ? error.message
           : 'ChatVerse could not accept that command. Try again shortly.';
+      if (error instanceof RuleError)
+        this.world.run(
+          'INSERT OR IGNORE INTO receipts VALUES (?,?,?)',
+          key,
+          JSON.stringify({ rejected: true, message }),
+          this.world.now(),
+        );
     }
-    this.enqueue(`@${safeName(event.chatter_user_login ?? actor.name)} ${message}`);
+    this.enqueue(
+      `@${safeName(event.chatter_user_login ?? actor.name)} ${message}`,
+      undefined,
+      write ? 1 : 0,
+    );
   }
-  enqueue(body: string, outboxId?: number) {
+  private pruneQueue() {
+    this.queue = this.queue.filter((row) => {
+      const stale = row.expires <= Date.now();
+      if (stale && row.outboxId)
+        this.world.run(
+          "UPDATE outbox SET status='expired' WHERE id=? AND status='queued'",
+          row.outboxId,
+        );
+      return (
+        !stale &&
+        (!row.outboxId ||
+          this.world.get('SELECT status FROM outbox WHERE id=?', row.outboxId)?.status === 'queued')
+      );
+    });
+  }
+  enqueue(body: string, outboxId?: number, priority = 0) {
+    this.pruneQueue();
     if (this.queue.length >= 50) return false;
-    this.queue.push({ body: body.slice(0, 480), expires: Date.now() + 15000, outboxId });
+    this.queue.push({ body: body.slice(0, 480), expires: Date.now() + 15000, outboxId, priority });
     return true;
   }
   private async flush() {
+    this.pruneQueue();
+    this.world.run(
+      "UPDATE outbox SET status='expired' WHERE status='pending' AND created_at<?",
+      this.world.now() - 15000,
+    );
     if (
       this.sending ||
       !this.status.connected ||
@@ -549,17 +639,23 @@ export class TwitchIntegration {
       this.world.now() - 15000,
     );
     const pending = this.world.all(
-      "SELECT * FROM outbox WHERE status='pending' ORDER BY id LIMIT 3",
+      "SELECT o.*, CASE WHEN e.type IN ('battle','chapter','announcement') THEN 2 ELSE 0 END priority FROM outbox o JOIN events e ON e.id=o.event_id WHERE o.status='pending' ORDER BY priority DESC,o.id LIMIT 3",
     );
     for (const row of pending) {
-      if (!this.enqueue(row.body, row.id)) break;
+      if (!this.enqueue(row.body, row.id, row.priority)) break;
       this.world.run("UPDATE outbox SET status='queued' WHERE id=?", row.id);
     }
     const cutoff = Date.now() - 30000;
     this.sends = this.sends.filter((t) => t > cutoff);
     if (this.sends.length >= 10) return;
+    this.queue.sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
     const next = this.queue.shift();
     if (!next) return;
+    if (
+      next.outboxId &&
+      this.world.get('SELECT status FROM outbox WHERE id=?', next.outboxId)?.status !== 'queued'
+    )
+      return;
     if (next.expires < Date.now()) {
       if (next.outboxId)
         this.world.run("UPDATE outbox SET status='expired' WHERE id=?", next.outboxId);
@@ -620,6 +716,7 @@ export class TwitchIntegration {
     this.grant = null;
     this.update({ ...disconnected, configured: this.status.configured, state: 'Disconnected' });
     this.world.atomic(() => {
+      this.world.set('acceptedTwitchJoin', null);
       this.world.run("UPDATE outbox SET status='expired' WHERE status='pending'");
       this.world.run("UPDATE outbox SET status='unknown' WHERE status='queued'");
     });

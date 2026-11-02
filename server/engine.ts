@@ -87,14 +87,19 @@ export function resolveBattle(input: BattleInput): BattleResult {
     )
   )
     throw new Error('Invalid battle inputs');
-  if (input.ruleset !== 'chatverse-v2') return resolveLegacyBattle(input);
+  if (!['chatverse-v2', 'chatverse-v3'].includes(input.ruleset)) return resolveLegacyBattle(input);
   const [a, b] = input.sides;
-  for (const side of input.sides) {
+  for (const [index, side] of input.sides.entries()) {
     const growth = growthFor(side.population ?? -1);
+    const development = input.ruleset === 'chatverse-v3' ? side.districtLevel : 0;
     if (
       !Number.isSafeInteger(side.population) ||
       side.population! < 0 ||
-      side.maxHealth !== growth.fortressHealth ||
+      !Number.isInteger(development) ||
+      development! < 0 ||
+      development! > 3 ||
+      (index === 0 && development !== 0) ||
+      side.maxHealth !== growth.fortressHealth + development! * 60 ||
       side.healthBonusBp !== growth.healthBonusBp
     )
       throw new Error('Invalid frozen fortress health');

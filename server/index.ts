@@ -7,11 +7,12 @@ import { Steward } from './steward';
 import { createApp } from './app';
 import { acquireInstallationLock } from './lock';
 import { RealmRegistry } from './realms';
-if (existsSync('.env'))
+const rehearsal = process.env.CHATVERSE_REHEARSAL === '1';
+if (!rehearsal && existsSync('.env'))
   for (const line of readFileSync('.env', 'utf8').split(/\r?\n/)) {
     const match = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/);
     if (match && !process.env[match[1]])
-      process.env[match[1]] = match[2].replace(/^['"]|['"]$/g, '');
+      process.env[match[1]] = match[2].trim().replace(/^['"]|['"]$/g, '');
   }
 const directory = resolve(process.env.CHATVERSE_DATA_DIR ?? 'data');
 const releaseLock = acquireInstallationLock(directory);
@@ -27,7 +28,11 @@ const twitch = new TwitchIntegration(
 const registry = new RealmRegistry(worlds, directory);
 const stewards = new Map<World, Steward>();
 const port = Number(process.env.PORT ?? 3000);
-const { app, bootstrap } = await createApp(worlds, twitch, { port, registry });
+const { app, bootstrap } = await createApp(worlds, twitch, {
+  port,
+  registry,
+  tasksDirectory: directory,
+});
 const timer = setInterval(() => {
   for (const world of registry.allWorlds())
     try {
@@ -45,7 +50,7 @@ await app.listen({ port, host: '127.0.0.1' });
 console.log(
   `\n  CHATVERSE · Your community, a world of its own\n\n  Local:   http://localhost:${port}\n  Unlock:  ${bootstrap}\n\n  This code unlocks local admin controls. Keep it private.\n  Live Twitch is ${twitch.status.configured ? 'configured; checking authorization' : 'not configured. Simulation is ready'}.\n`,
 );
-void twitch.initialize();
+if (!rehearsal) void twitch.initialize();
 let stopping = false;
 async function stop() {
   if (stopping) return;

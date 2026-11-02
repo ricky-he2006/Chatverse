@@ -59,6 +59,7 @@ export type Kingdom = {
   banner: string;
 };
 export type Territory = {
+  development?: { level: number; healthBonus: number; nextCost: number | null };
   id: string;
   name: string;
   owner: Faction;
@@ -77,6 +78,7 @@ export type BattleInput = {
   sides: [CombatSide, CombatSide];
 };
 export type CombatSide = {
+  districtLevel?: number;
   kingdom: Faction;
   tactic: Tactic;
   roster: { id: string; name: string; power: number; stats: Stats }[];
@@ -108,6 +110,7 @@ export type Chapter = {
   deadline: number;
   remaining: number | null;
   createdAt: number;
+  resumedAt?: number | null;
   resolvedAt: number | null;
   pledged: Record<Faction, number>;
   votes: Record<Faction, Record<Tactic, number>> | null;
@@ -148,6 +151,7 @@ export type Season = {
   status: string;
 };
 export type Settings = {
+  herald?: import('./herald').HeraldSettings;
   quiet: boolean;
   autoChapters: boolean;
   chatOutput: boolean;
@@ -155,6 +159,7 @@ export type Settings = {
   tone: 'heroic' | 'cozy' | 'dry';
 };
 export type IntegrationStatus = {
+  lastAcceptedJoin?: { name: string; at: number; kingdom: Faction } | null;
   configured: boolean;
   connected: boolean;
   state: string;

@@ -1,0 +1,157 @@
+.world-tasks {
+  display: grid;
+  gap: 24px;
+}
+.world-tasks > .panel {
+  padding: 24px;
+}
+.world-tasks .panel-heading {
+  padding: 0 0 16px;
+}
+.world-race-scope {
+  padding: 14px 18px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--brass);
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+.world-tasks p {
+  color: var(--muted);
+  line-height: 1.7;
+}
+.world-tasks .race-objective {
+  font-size: 16px;
+  color: var(--paper);
+  max-width: 80ch;
+}
+.race-rules {
+  display: flex;
+  gap: 12px 24px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--muted);
+  margin: 18px 0;
+}
+.race-prizes {
+  color: var(--gold) !important;
+  font-size: 13px;
+}
+.world-race-standings > div {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 20px 12px;
+  border-block-start: 1px solid var(--border);
+}
+.world-race-standings > div.current-community {
+  background: #c5a36c0b;
+}
+.world-race-standings > div > strong {
+  font:
+    500 26px Georgia,
+    serif;
+  min-width: 36px;
+  color: var(--gold);
+}
+.world-race-standings span {
+  flex: 1;
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+}
+.world-race-standings small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.world-race-standings em {
+  font-size: 13px;
+  font-style: normal;
+  color: var(--gold);
+  min-width: 95px;
+  text-align: right;
+}
+.race-fairness,
+.proof-submit > p,
+.finalize-help {
+  display: block;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+.world-tasks label {
+  display: grid;
+  gap: 9px;
+  color: var(--muted);
+  font-size: 13px;
+  margin: 18px 0;
+}
+.world-tasks input,
+.world-tasks select,
+.world-tasks textarea {
+  width: 100%;
+  background: var(--ink-950);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--paper);
+  padding: 12px;
+  min-height: 44px;
+}
+.world-tasks textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+.race-create-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 20px;
+}
+.proof-submit,
+.proof-review-row {
+  border-top: 1px solid var(--border);
+  padding-top: 20px;
+  margin-top: 20px;
+}
+.proof-image {
+  display: block;
+  max-width: 100%;
+  max-height: 520px;
+  object-fit: contain;
+  margin: 20px 0;
+  border: 1px solid var(--border);
+}
+.proof-review-row strong {
+  overflow-wrap: anywhere;
+}
+.finalize-help {
+  margin: 10px 0 0;
+}
+.world-tasks .experience-heading h1 {
+  margin: 8px 0;
+  font-size: 40px;
+}
+@media (max-width: 650px) {
+  .world-tasks > .panel {
+    padding: 18px;
+  }
+  .world-tasks .experience-heading h1 {
+    font-size: 30px;
+  }
+  .world-race-standings > div {
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 16px 8px;
+  }
+  .world-race-standings em {
+    margin-left: 48px;
+    text-align: left;
+    flex-basis: 100%;
+  }
+  .race-create-grid {
+    grid-template-columns: 1fr;
+  }
+  .world-tasks .button {
+    margin-block: 4px;
+  }
+}
+.world-tasks input[type=checkbox]{width:18px;height:18px;min-height:18px;accent-color:var(--brass)}.world-tasks .race-checkbox{display:flex;gap:12px;align-items:center;min-height:44px}

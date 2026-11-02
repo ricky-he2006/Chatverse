@@ -9,6 +9,8 @@ export type RealmIdentity = {
   color: string;
   sigil: string;
   description: string;
+  mapImage: string;
+  mapDescription: string;
   x: number;
   y: number;
 };
@@ -21,6 +23,8 @@ export const REALMS: RealmIdentity[] = [
     color: '#8bbcd1',
     sigil: '✦',
     description: 'Ancient peaks. Familiar faces. The place your story began.',
+    mapImage: '/everfall-realms-v2.png',
+    mapDescription: 'Snowbound fortresses, a golden lake citadel and moonlit cliff towers',
     x: 24,
     y: 32,
   },
@@ -32,6 +36,8 @@ export const REALMS: RealmIdentity[] = [
     color: '#dfaa7c',
     sigil: '☀',
     description: 'Sunlit citadels and a community with fire in its heart.',
+    mapImage: '/realm-emberwatch-v1.png',
+    mapDescription: 'Sandstone canyon fortresses, desert oases and a turquoise river at sunset',
     x: 69,
     y: 27,
   },
@@ -43,6 +49,8 @@ export const REALMS: RealmIdentity[] = [
     color: '#b49bdd',
     sigil: '☾',
     description: 'A quiet harbor of midnight towers and untold stories.',
+    mapImage: '/realm-moonharbor-v1.png',
+    mapDescription: 'Moonlit island castles, silver seas and lantern-lit harbor causeways',
     x: 77,
     y: 73,
   },
@@ -54,6 +62,8 @@ export const REALMS: RealmIdentity[] = [
     color: '#8cbaa2',
     sigil: '❖',
     description: 'Wild green borders, old promises and new beginnings.',
+    mapImage: '/realm-stormgarden-v1.png',
+    mapDescription: 'Green highland castles, garden citadels, forest bridges and waterfalls',
     x: 31,
     y: 77,
   },

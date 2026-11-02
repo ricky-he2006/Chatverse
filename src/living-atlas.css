@@ -1,0 +1,775 @@
+/* Living Atlas: shared functional tokens. Faction inks are lightened for AA text. */
+.design-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+:root {
+  --ink-950: #111519;
+  --ink-900: #191f23;
+  --ink-800: #242b30;
+  --line: #374044;
+  --paper: #eae5d8;
+  --brass: #c5a36c;
+  --blue: #78a6c6;
+  --red: #d28d83;
+  --green: #9bb69c;
+  --violet: #8e78b5;
+  --danger: #d97062;
+  --success: #8cb39a;
+  --bg: var(--ink-950);
+  --surface: var(--ink-900);
+  --raised: var(--ink-800);
+  --border: var(--line);
+  --text: var(--paper);
+  --muted: #a6aea9;
+  --gold: var(--brass);
+  --north: var(--blue);
+  --east: var(--red);
+  --west: var(--green);
+  --sidebar: 220px;
+  font-family: Inter, 'Segoe UI', sans-serif;
+  color: var(--paper);
+  background: var(--ink-950);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+body,
+.workspace,
+.app-shell,
+.companion-shell {
+  background: var(--ink-950);
+  color: var(--paper);
+}
+.sidebar,
+.topbar {
+  background: var(--ink-950);
+  border-color: var(--line);
+}
+.main-content {
+  max-width: 1440px;
+  margin-inline: auto;
+  width: 100%;
+}
+.panel {
+  background: var(--ink-900);
+  border-color: var(--line);
+  border-radius: 8px;
+  box-shadow: none;
+}
+.button {
+  border-radius: 6px;
+  min-height: 40px;
+  font-size: 13px;
+  box-shadow: none;
+}
+.button.primary {
+  background: var(--brass);
+  border-color: var(--brass);
+  color: var(--ink-950);
+}
+.button.secondary {
+  background: var(--ink-800);
+  border-color: var(--line);
+  color: var(--paper);
+}
+button,
+input,
+select,
+textarea,
+a {
+  transition-duration: 140ms;
+}
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--paper);
+  outline-offset: 4px;
+}
+button:disabled {
+  opacity: 0.55;
+}
+.eyebrow,
+.panel-heading .eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.1em;
+}
+.panel h2 {
+  font-size: 20px;
+}
+.sidebar nav button {
+  min-height: 44px;
+  font-size: 14px;
+}
+.sidebar .brand {
+  font-family: 'Iowan Old Style', Georgia, serif;
+}
+.page-header h1,
+.experience-heading h1,
+.citizen-identity h1 {
+  font-family: 'Iowan Old Style', Georgia, serif;
+  font-weight: 500;
+}
+.page-header h1 {
+  font-size: 36px;
+}
+.page-header {
+  margin-bottom: 24px;
+}
+.tag,
+.faction-tag {
+  font-size: 12px;
+}
+.mode-switch {
+  background: var(--ink-900);
+}
+.mode-switch button {
+  min-height: 40px;
+}
+.environment-note {
+  font-size: 13px;
+  border-color: var(--line);
+  background: var(--ink-900);
+}
+.environment-note strong {
+  color: var(--paper);
+}
+.experience-rail .active,
+.companion-tabs .active {
+  background: transparent;
+  box-shadow: inset 0 -2px var(--brass);
+  color: var(--paper);
+}
+/* Studio is a utility workspace, with the live decision as the focal point. */
+.experience-stack > .experience-grid > .panel,
+.experience-stack > .panel {
+  padding: 20px;
+}
+.experience-stack .panel-heading {
+  padding: 0 0 16px;
+}
+.full-map-panel .panel-heading {
+  padding: 0 0 16px;
+}
+.stream-room-hero {
+  min-height: 0;
+  padding: 0 0 24px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  overflow: visible;
+}
+.stream-room-hero:before {
+  display: none;
+}
+.stream-room-hero h1 {
+  font:
+    500 clamp(30px, 3vw, 42px)/1.15 'Iowan Old Style',
+    Georgia,
+    serif;
+  margin: 12px 0;
+  color: var(--paper);
+}
+.stream-room-hero p {
+  color: var(--muted);
+  max-width: 570px;
+  font-size: 15px;
+}
+.stream-room-hero aside {
+  background: transparent;
+  border: 0;
+  border-left: 1px solid var(--line);
+  border-radius: 0;
+  min-width: 190px;
+  padding: 8px 0 8px 28px;
+  text-align: left;
+}
+.stream-room-hero aside strong {
+  font:
+    500 36px/1.2 'Segoe UI',
+    sans-serif;
+  color: var(--paper);
+}
+.stream-room-hero aside > span:not(.eyebrow) {
+  font-size: 13px;
+}
+.stream-room-hero aside small {
+  font-size: 12px;
+}
+.stream-controls {
+  padding-bottom: 8px;
+}
+.kingdom-pulse > button {
+  background: transparent;
+  border-radius: 6px;
+  box-shadow: none;
+}
+.kingdom-pulse small {
+  font-size: 12px;
+}
+.citizen-identity {
+  background: var(--ink-900);
+  border-radius: 8px;
+}
+.citizen-identity aside > span,
+.citizen-identity aside > small {
+  font-size: 13px;
+}
+.companion-mode {
+  font-size: 12px;
+  letter-spacing: 0.06em;
+}
+.companion-row p {
+  font-size: 14px;
+}
+.companion-shell .experience-grid {
+  align-items: start;
+}
+.upgrade-comparison {
+  border-left: 2px solid var(--brass);
+  padding: 8px 12px;
+  color: var(--paper) !important;
+  background: #c5a36c08;
+}
+.upgrade-comparison small {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 6px;
+}
+.companion-welcome:before {
+  opacity: 0.22;
+}
+.companion-person small {
+  font-size: 12px;
+}
+/* World: original illustrated panorama with functional settlement markers. */
+.screen-world .experience-rail {
+  margin-bottom: 12px;
+  padding-bottom: 6px;
+}
+.screen-world .realm-map-banner {
+  padding-bottom: 12px;
+}
+.screen-world .realm-map-banner p {
+  margin: 6px 0 0;
+  font-size: 13px;
+}
+.world-screen-grid > .full-map-panel {
+  grid-column: 1;
+  grid-row: 2;
+}
+.world-screen-grid > .world-inspector {
+  grid-column: 2;
+  grid-row: 2;
+}
+.world-screen-grid > .world-growth-strip {
+  grid-column: 1/-1;
+  grid-row: 3;
+}
+.world-screen-grid > .realm-challenges {
+  grid-column: 1/-1;
+  grid-row: 4;
+}
+.overlay-presentation {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+.overlay-presentation label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+}
+.overlay-presentation select {
+  padding: 10px;
+  background: var(--ink-800);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--paper);
+}
+.scenic-atlas {
+  min-width: 0;
+  aspect-ratio: 2.75;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #151d20;
+  min-height: 0;
+}
+.scenic-atlas:after {
+  box-shadow: inset 0 0 0 9px #11151955;
+  border: 1px solid #c5a36c40;
+  inset: 8px;
+  z-index: 1;
+}
+.ownership-map {
+  display: block;
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  inset: 0;
+}
+.territory-cell {
+  transition:
+    fill-opacity 150ms,
+    fill 450ms;
+}
+.territory-cell.selectable {
+  cursor: pointer;
+}
+.territory-cell.selectable:hover {
+  fill-opacity: 0.35;
+}
+.scenic-routes {
+  opacity: 0.65;
+}
+.scenic-routes line {
+  stroke-width: 1;
+  stroke-dasharray: 3 7;
+}
+.settlement {
+  min-width: 40px;
+  min-height: 40px;
+  padding: 6px;
+  text-shadow: none;
+}
+.settlement-pin {
+  background: var(--ink-950);
+  box-shadow: none;
+  border-radius: 3px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+}
+.settlement.capital .settlement-pin {
+  width: 34px;
+  height: 34px;
+}
+.settlement.selected .settlement-pin,
+.settlement:hover .settlement-pin,
+.settlement:focus-visible .settlement-pin {
+  box-shadow:
+    0 0 0 3px var(--ink-950),
+    0 0 0 4px var(--brass);
+  background: var(--ink-800);
+}
+.settlement strong {
+  font:
+    500 12px/1.4 'Segoe UI',
+    sans-serif;
+  background: var(--ink-950);
+  padding: 2px 6px;
+  color: var(--paper);
+  max-width: 150px;
+  white-space: normal;
+  text-align: center;
+}
+.settlement:not(.capital):not(.selected):not(:hover):not(:focus-visible) strong,
+.settlement:not(.selected):not(:hover):not(:focus-visible) small {
+  display: none;
+}
+.settlement small {
+  font-size: 11px;
+  letter-spacing: 0;
+  text-transform: none;
+  background: var(--ink-950);
+  padding: 2px 6px;
+}
+.frontier-fog {
+  opacity: 0.7;
+  filter: none;
+}
+.frontier-fog:before {
+  display: none;
+}
+.frontier-fog strong {
+  display: none;
+}
+.frontier-fog small {
+  font-size: 10px;
+  background: var(--ink-950);
+  padding: 3px;
+}
+.atlas-caption {
+  font:
+    500 11px 'Segoe UI',
+    sans-serif;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  background: var(--ink-950);
+  padding: 6px 10px;
+  bottom: 14px;
+}
+.world-screen-grid {
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 20px;
+  align-items: start;
+}
+.realm-map-banner {
+  grid-column: 1/-1;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  padding: 0 0 20px;
+}
+.realm-map-banner h1 {
+  font-size: 30px;
+  font-family: 'Iowan Old Style', Georgia, serif;
+  font-weight: 500;
+  margin: 8px 0;
+}
+.map-note {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 12px 0 0;
+  line-height: 1.5;
+}
+.full-map-panel {
+  grid-column: 1;
+  grid-row: 2;
+  padding: 16px;
+}
+.world-inspector {
+  grid-column: 2;
+  grid-row: 2;
+  position: sticky;
+  top: 20px;
+}
+.world-inspector .territory-crest {
+  margin: 12px 0;
+}
+.world-inspector .rules-note {
+  background: transparent;
+  border: 0;
+  padding: 16px 8px;
+}
+.world-growth-strip,
+.realm-challenges {
+  grid-column: 1/-1;
+}
+.map-summary {
+  font-size: 12px;
+}
+.map-summary > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.world-inspector p,
+.world-growth-strip p,
+.race-card p {
+  font-size: 14px;
+}
+.map-zoom-container .scenic-atlas {
+  min-height: 0;
+}
+.world-growth-strip {
+  background: transparent;
+  border-radius: 0;
+  border-block: 1px solid var(--line);
+}
+/* Chronicle uses a continuous editorial timeline, not nested decorative cards. */
+.chronicle-entry {
+  background: transparent;
+  box-shadow: none;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  padding: 12px 0 24px;
+}
+.chronicle-entry h3 {
+  font:
+    500 24px/1.3 'Iowan Old Style',
+    Georgia,
+    serif;
+  color: var(--paper);
+}
+.chronicle-entry p {
+  font-size: 15px;
+  line-height: 1.75;
+  max-width: 70ch;
+}
+.chronicle-meta,
+.chronicle-provenance {
+  font-size: 12px;
+}
+.battle-arena,
+.battle-hero {
+  box-shadow: none;
+  border-color: var(--line);
+}
+/* OBS: opaque backing plate for compression; the rest of the canvas stays transparent. */
+.overlay-root {
+  background: transparent !important;
+  color-scheme: normal;
+}
+.obs-overlay {
+  --obs-margin: 32px;
+}
+.obs-cluster {
+  position: absolute;
+  top: var(--obs-margin);
+  right: var(--obs-margin);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: clamp(300px, 23vw, 440px);
+}
+.anchor-top-left .obs-cluster {
+  left: var(--obs-margin);
+  right: auto;
+}
+.anchor-bottom-left .obs-cluster,
+.anchor-bottom-right .obs-cluster {
+  top: auto;
+  bottom: var(--obs-margin);
+  flex-direction: column-reverse;
+}
+.anchor-bottom-left .obs-cluster {
+  left: var(--obs-margin);
+  right: auto;
+}
+.obs-cluster .obs-campaign,
+.obs-cluster .obs-notice {
+  position: static;
+  width: 100%;
+  margin: 0;
+  background: #191f23f5;
+  border: 1px solid #c5a36c80;
+  border-radius: 6px;
+  box-shadow: none;
+  padding: 12px 14px;
+}
+.obs-mode {
+  top: 16px;
+  left: 16px;
+  background: #111519f5;
+  border-color: var(--line);
+  color: var(--paper);
+  font-size: 12px;
+  letter-spacing: 0.05em;
+}
+.obs-eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  margin-bottom: 10px;
+  color: var(--brass);
+}
+.obs-matchup {
+  gap: 8px;
+}
+.obs-matchup > div {
+  gap: 8px;
+}
+.obs-matchup > div > span {
+  font-size: 14px;
+  color: var(--paper);
+}
+.obs-matchup strong {
+  white-space: nowrap;
+  font:
+    500 22px 'Segoe UI',
+    sans-serif;
+}
+.obs-score-track {
+  margin-top: 12px;
+}
+.obs-caption {
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--paper);
+  margin-top: 9px;
+}
+.obs-cluster .obs-notice {
+  gap: 12px;
+  padding: 12px 14px;
+}
+.obs-notice > div {
+  width: 32px;
+  height: 36px;
+  border: 0;
+  background: transparent;
+}
+.obs-notice strong {
+  font:
+    500 18px/1.3 'Segoe UI',
+    sans-serif;
+}
+.obs-notice small {
+  font-size: 10px;
+  margin-bottom: 4px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.motion-off * {
+  animation: none !important;
+  transition: none !important;
+}
+@media (max-height: 800px) {
+  .obs-cluster .obs-campaign {
+    padding: 10px 12px;
+  }
+  .obs-eyebrow {
+    font-size: 10px;
+    line-height: 1.1;
+    margin-bottom: 5px;
+  }
+  .obs-matchup > div > span {
+    font-size: 12px;
+    line-height: 1.15;
+  }
+  .obs-matchup strong {
+    font-size: 18px;
+    line-height: 1.1;
+    margin-top: 3px;
+  }
+  .obs-score-track {
+    margin-top: 8px;
+    height: 4px;
+  }
+  .obs-caption {
+    font-size: 11px;
+    line-height: 1.15;
+    margin-top: 6px;
+  }
+}
+@media (max-width: 1199px) {
+  .world-screen-grid > .full-map-panel {
+    grid-column: 1;
+    grid-row: 2;
+  }
+  .world-screen-grid > .world-inspector {
+    grid-column: 1;
+    grid-row: 3;
+  }
+  .world-screen-grid > .world-growth-strip {
+    grid-column: 1;
+    grid-row: 4;
+  }
+  .world-screen-grid > .realm-challenges {
+    grid-column: 1;
+    grid-row: 5;
+  }
+  .world-screen-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .full-map-panel {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  .world-inspector {
+    grid-column: 1;
+    grid-row: auto;
+    position: static;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  .world-inspector .territory-crest {
+    float: right;
+  }
+  .world-inspector h2 {
+    text-align: left;
+  }
+  .world-inspector .faction-tag {
+    margin-inline: 0;
+  }
+  .world-growth-strip,
+  .realm-challenges {
+    grid-column: 1;
+  }
+  .map-zoom-container .scenic-atlas {
+    min-height: 0;
+  }
+}
+@media (max-width: 799px) {
+  .screen-world .full-map-panel .panel-heading .button {
+    min-height: 40px;
+    font-size: 12px;
+    padding: 8px 10px;
+  }
+  .page-header h1 {
+    font-size: 28px;
+  }
+  .world-inspector {
+    grid-template-columns: 1fr;
+    order: 0;
+  }
+  .full-map-panel {
+    padding: 12px;
+  }
+  .scenic-atlas,
+  .map-zoom-container .scenic-atlas {
+    aspect-ratio: 1.5;
+    min-height: 300px;
+  }
+  .settlement.capital strong {
+    font-size: 11px;
+    max-width: 82px;
+  }
+  .frontier-fog small {
+    display: none;
+  }
+  .atlas-caption span {
+    display: none;
+  }
+  .stream-room-hero {
+    padding: 0 0 20px;
+  }
+  .stream-room-hero h1 {
+    font-size: 30px;
+  }
+  .stream-room-hero aside {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    padding: 18px 0 0;
+    margin-top: 20px;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    min-width: 0;
+  }
+  .stream-room-hero aside strong {
+    grid-row: 1/4;
+  }
+  .stream-room-hero aside .eyebrow {
+    font-size: 11px;
+  }
+  .stream-room-hero aside > span,
+  .stream-room-hero aside small {
+    grid-column: 2;
+  }
+  .world-growth-strip {
+    padding: 20px 0;
+  }
+  .experience-rail button,
+  .companion-tabs button {
+    min-height: 44px;
+    font-size: 13px;
+  }
+  .companion-shell .eyebrow {
+    font-size: 11px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *:before,
+  *:after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

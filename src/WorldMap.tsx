@@ -1,7 +1,9 @@
 import { useId } from 'react';
 import { WORLD_TERRITORIES } from '../shared/expansion';
 import { FACTIONS, TERRITORIES } from '../shared/catalog';
+import { realmIdentity } from '../shared/realms';
 import type { Faction, Territory } from '../shared/types';
+import { Castle as CastleIcon, Diamond, LockKeyhole } from 'lucide-react';
 
 export function Crest({ faction = 'north', size = 36 }: { faction?: Faction; size?: number }) {
   const color = FACTIONS[faction].color;
@@ -52,19 +54,23 @@ export function WorldMap({
   selected,
   compact = false,
   realmName = 'Everfall',
+  realmId = 'home',
+  focusFaction,
 }: {
   territories: Territory[];
   onSelect?: (id: string) => void;
   selected?: string;
   compact?: boolean;
   realmName?: string;
+  realmId?: string;
+  focusFaction?: Faction;
 }) {
-  const map = territories.length ? territories : TERRITORIES;
+  const map: Territory[] = territories.length ? territories : TERRITORIES;
   return (
     <div className={`scenic-atlas ${compact ? 'compact' : ''}`}>
       <img
-        src="/everfall-realms-v2.png"
-        alt={`Snowbound North, sunlit East and moonlit West surround the lake of ${realmName}`}
+        src={realmIdentity(realmId).mapImage}
+        alt={`${realmName}: ${realmIdentity(realmId).mapDescription}`}
       />
       <svg
         viewBox="0 0 1000 360"
@@ -101,7 +107,7 @@ export function WorldMap({
                 className="frontier-fog"
                 style={{ left: blueprint.x + '%', top: blueprint.y + '%' }}
               >
-                <span>◇</span>
+                <LockKeyhole size={12} />
                 <small>{blueprint.unlockAt} citizens</small>
                 <strong>{blueprint.name}</strong>
               </div>
@@ -110,7 +116,7 @@ export function WorldMap({
         return (
           <button
             key={t.id}
-            className={`settlement ${t.capital ? 'capital' : ''} ${selected === t.id ? 'selected' : ''}`}
+            className={`settlement ${t.capital ? 'capital' : ''} ${selected === t.id ? 'selected' : ''} ${focusFaction && t.owner !== focusFaction ? 'other-kingdom' : ''}`}
             style={
               {
                 left: blueprint.x + '%',
@@ -125,9 +131,19 @@ export function WorldMap({
               t.name + ', ' + FACTIONS[t.owner].name + (t.capital ? ', protected capital' : '')
             }
           >
-            <span className="settlement-pin">{t.capital ? '♜' : '◆'}</span>
+            <span className="settlement-pin">
+              {t.capital ? <CastleIcon size={18} /> : <Diamond size={12} />}
+            </span>
             <strong>{t.name}</strong>
-            {!compact && <small>{t.capital ? 'PROTECTED CAPITAL' : 'OPEN FRONTIER'}</small>}
+            {!compact && (
+              <small>
+                {t.contestedToday
+                  ? 'Resting this campaign day'
+                  : t.capital
+                    ? 'Protected capital'
+                    : FACTIONS[t.owner].name}
+              </small>
+            )}
           </button>
         );
       })}
@@ -168,11 +184,11 @@ function Castle({
   );
 }
 
-export function RealmArtwork() {
+export function RealmArtwork({ realmId = 'home' }: { realmId?: string }) {
   return (
     <img
       className="landscape realm-artwork"
-      src="/everfall-realms-v2.png"
+      src={realmIdentity(realmId).mapImage}
       width={2172}
       height={724}
       alt=""

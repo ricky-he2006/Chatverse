@@ -1,8 +1,16 @@
 # ChatVerse
 
+Judge demo: run `./start-judge-demo.ps1` for a fresh isolated rehearsal on port 3001, then open `http://localhost:3001/judges-demo.html`. Your normal app/Twitch world remains on port 3000. See the [2:55 click-by-click presenter script](docs/THREE_MINUTE_DEMO.md), [live presenter runbook](docs/JUDGES_LIVE_DEMO.md), and [video recording outline](docs/JUDGES_VIDEO_SCRIPT.md).
+
+Each configured streamer realm now has its own landscape. Stream room links directly to the viewer **Armory**, **Challenges**, and **Season rankings**; the streamer navigation also exposes **Citizens**, **Character & gear**, and **Leaderboard**. [Realm artwork, prompts and economy guide](docs/REALM_ART_AND_PROGRESSION.md).
+
+The **Living Atlas** design pass adds an SVG ownership map, quieter Stream room, explicit upgrade comparisons and compact configurable OBS ribbons. [Design review and screenshots](docs/DESIGN_REVIEW.md).
+
+The owner console now opens in **Stream room**. Switch to **Backstage** for system management, or try **Citizen preview** / **Lord preview** for the separate personal companion. Lords propose a frontier; the streamer reviews it before a council opens. [Experience plan, permissions and verification](docs/EXPERIENCE_PLAN.md).
+
 Open **World atlas** to explore four persistent Simulation streamer realms, then enter each realm's own kingdom map. Live remains limited to the authorized channel. [Connected-world scope and setup](docs/CONNECTED_WORLD.md).
 
-See the [full project audit](docs/AUDIT.md) for confirmed fixes, 56-test verification, performance measurements and remaining real Twitch/OBS validation gates.
+See the [October 27 engineering audit](docs/AUDIT.md) for that audit's scope, test results, performance measurements, and remaining Twitch/OBS validation gates. Current changes and status are documented in the release notes below.
 
 Supporter honors are implemented: Citizen / Knight / Baron / Duke, with separate elected Lord status. Try simulated rank previews on **Character & gear**. Live ranks require optional Twitch subscription authorization; see [supporter rank setup and rules](docs/SUPPORTER_RANKS.md).
 
@@ -10,7 +18,7 @@ The living atlas now reveals new outposts as kingdoms grow, with capped fortress
 
 **Your stream. Their kingdom.** A local-first Twitch community campaign: citizens join factions, develop persistent characters, choose battle tactics, elect Lords and write a shared chronicle while the streamer plays their normal game.
 
-This repository now contains a working frontend, backend, game engine and populated Simulation. Real Twitch OAuth/EventSub code is included; a real-channel authorization test still requires the owner's credentials. See [build status](docs/BUILD_STATUS.md) for the precise verified scope and remaining work.
+This repository contains the frontend, backend, game engine and populated Simulation. Twitch OAuth and EventSub integration are implemented. See [build status](docs/BUILD_STATUS.md) for verified scope and external validation limits.
 
 ## Run locally
 
@@ -109,3 +117,10 @@ Tests use isolated temporary/in-memory SQLite worlds and mocked providers, never
 Architecture refinements: use Node 24's built-in SQLite and explicit SQL instead of Drizzle/native addons; plain typed fetch + SSE snapshot invalidation instead of a query-cache dependency; deterministic battle inputs are frozen separately from current entities. See [planning index](docs/PRODUCT_SPEC.md) for the full intended destination. Items explicitly listed as later milestones are not represented as shipped features.
 
 Visual assets combine authored SVG/CSS with an original generated Everfall panorama, the UI icons are Lucide (ISC), and fonts are local system/Georgia. The [design polish record](docs/DESIGN_POLISH.md) includes artwork provenance, the generation prompt and visual verification. The provided design reference is retained in documentation for inspiration; it is not used as production art or proof of functioning integrations. Review reference/brand rights before public submission. Source code is not assigned a public redistribution license yet.
+
+## Publishing notes
+
+- `.env`, databases, backups, encrypted Twitch credentials, dependencies, build output and the supplied visual reference are excluded by [.gitignore](.gitignore). `.env.example` is safe to copy and contains blank credential fields.
+- No Git remote is configured in this checkout. Review `git status` and the files you plan to commit before adding a remote and pushing.
+- No license file is included. Choose a license separately if you want to grant others permission to reuse or redistribute the code.
+- Live Twitch integration is configured for local development. Genuine channel delivery and native OBS audio routing are separate checks; see [Twitch setup](docs/TWITCH_INTEGRATION.md) and [Herald/OBS notes](docs/ROYAL_HERALD.md).

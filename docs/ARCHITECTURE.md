@@ -1,5 +1,7 @@
 # Architecture and contracts
 
+Implemented experience split (October 27): [Stream room, Backstage and the identity-bound citizen/Lord companion](EXPERIENCE_PLAN.md#implemented-architecture--october-27-2026). This addendum describes current route permissions, polling and session lifetimes; the broader architecture below retains planning context.
+
 Status: proposed, planning only. Canonical product boundaries are in [PRODUCT_SPEC](PRODUCT_SPEC.md); combat rules in [GAME_SYSTEMS](GAME_SYSTEMS.md).
 
 ## Environment inspection

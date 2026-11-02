@@ -1,5 +1,7 @@
 # Database design
 
+Current schema is version **4**. The additive `chapter_proposals` table persists Lord suggestions and streamer decisions independently in each realm database. Its keys, lifecycle and migration are documented in [the experience implementation addendum](EXPERIENCE_PLAN.md#persistence-and-lifecycle). Companion authentication is memory-only and does not store viewer access tokens in SQLite.
+
 Proposed SQLite relational schema, not executed migrations. Use identical migrations for `data/live.sqlite` and `data/simulation.sqlite`; no cross-file foreign keys. Live OAuth secrets are in a separate OS-protected vault. [Game rules](GAME_SYSTEMS.md) determine business invariants; immutable snapshots are intentional historical records, not substitutes for normalized current state.
 
 ## Conventions
@@ -79,3 +81,6 @@ Index membership `(realm_id,kingdom_id,left_at)`, character `(realm_id,xp_total 
 Migrations are numbered SQL checked into source, tested on empty and previous schemas for both modes. Back up before migration; fail startup on unknown/newer schema. Do not destructively auto-downgrade. Seed references have deterministic IDs and do not collide with Live IDs. Backups use SQLite backup API, daily and before migration, keep seven local copies by default; restore to a new file and validate integrity before replacing active data.
 
 Suggested retention: raw ordinary chat is never stored; command receipts retain minimal sender/command outcome for 30 days, diagnostic logs seven days, safe SSE replay 24 hours, audit and canonical gameplay history through current/previous season pending owner policy. No token/secret in exports. A privacy erasure workflow deletes/revokes auth records, anonymizes user display/subject and narrative mentions, retains anonymous battle calculations and totals, and reconciles backups on expiry. Final retention and published notices are a release task; no compliance claims are implied.
+
+## Implemented October 29 update
+World schema 5 includes territory_development. Separate world-tasks-simulation.sqlite and world-tasks-live.sqlite contain objectives, proofs/images, hashes, reviews and idempotent placement awards. These competition files require separate backup from world exports. See WORLDWIDE_CHALLENGES.md for identity, retention and storage limitations.

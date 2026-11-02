@@ -12,7 +12,8 @@
     "start": "tsx server/index.ts",
     "test": "tsx --test tests/*.test.ts",
     "check": "tsc --noEmit",
-    "benchmark": "tsx scripts/benchmark.ts"
+    "benchmark": "tsx scripts/benchmark.ts",
+    "demo:judges": "tsx scripts/judge-demo.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",

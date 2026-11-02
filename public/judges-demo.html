@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>ChatVerse · Presenter guide</title>
+    <link rel="stylesheet" href="/judges-demo.css" />
+    <script src="/judges-demo.js" defer></script>
+  </head>
+  <body>
+    <header>
+      <a href="/" class="brand">ChatVerse <span>Presenter guide</span></a
+      ><span class="simulation">REHEARSAL · SIMULATION ONLY</span>
+    </header>
+    <main>
+      <section class="intro">
+        <span class="eyebrow">THE STORY JUDGES SHOULD REMEMBER</span>
+        <h1>While the streamer plays,<br />chat builds a kingdom.</h1>
+        <p>
+          Prove Twitch first. Then follow one citizen from earned gold to a shared battle and a
+          lasting chronicle.
+        </p>
+        <p class="environment" id="environment">
+          Use <code>start-judge-demo.ps1</code> for a fresh, separate rehearsal on port 3001. Your
+          normal app and Twitch proof remain on port 3000.
+        </p>
+      </section>
+      <div class="presenter-layout">
+        <section>
+          <nav class="formats" aria-label="Presentation format">
+            <button id="live-format" aria-pressed="true">Live walkthrough · 6–8 min</button
+            ><button id="video-format" aria-pressed="false">Video cut · 2:55 total</button>
+          </nav>
+          <p id="format-note">
+            Each stop gives an action, a visible proof and the sentence to say. Read these notes off
+            camera.
+          </p>
+          <div id="steps"></div>
+          <section class="limits">
+            <h2>Keep the claims precise</h2>
+            <p>
+              The four communities are fictional. Live currently supports one authorized channel per
+              installation. World races demonstrate a shared local competition, not a deployed
+              worldwide network. Without provider credentials, narration is the deterministic
+              fallback. Royal Herald can speak recorded facts using local TTS without an LLM;
+              verify OBS audio routing separately.
+            </p>
+            <p>
+              Do not show unlock codes, OAuth credentials, private screenshot evidence, or overlay
+              capability URLs in the recording. Show current test evidence and Codex work at the
+              end; use your real session ID privately in the submission.
+            </p>
+          </section>
+        </section>
+        <aside class="run-sheet">
+          <span class="eyebrow">PRESENTER CONTROLS</span>
+          <h2>Keep the stream moving.</h2>
+          <output id="timer" aria-live="off">00:00</output>
+          <div class="timer-actions">
+            <button id="start-timer">Start timer</button
+            ><button id="reset-timer">Reset timer</button>
+          </div>
+          <p id="timer-note">
+            The timer only controls this guide. It never changes the game clock.
+          </p>
+          <label><input id="completed-twitch" type="checkbox" /> Real Twitch proof recorded</label
+          ><label><input id="completed-overlay" type="checkbox" /> Overlay source tested</label
+          ><label><input id="completed-secret" type="checkbox" /> Secret fields off camera</label
+          ><a
+            class="open-app"
+            target="chatverse-demo"
+            href="/?mode=simulation&amp;realm=emberwatch&amp;screen=overview&amp;view=streamer"
+            >Open rehearsal app ↗</a
+          >
+          <p>
+            Unlock privately with this rehearsal server’s terminal code. Browser links reuse one
+            demo window.
+          </p>
+          <h3>Before recording</h3>
+          <p>
+            Use a fresh rehearsal for each take. The paused Frostpass vote gives you setup time.
+            Upgrade Mira’s bow, fortify Frostpass, then resume and run the full battle.
+          </p>
+          <h3>If something interrupts</h3>
+          <p>
+            Do not reset your normal app. Relaunch the rehearsal script for fresh data. For an idle
+            overlay, send the test event in Studio → Overlay &amp; setup. Pin the ribbon for the
+            battle shot.
+          </p>
+        </aside>
+      </div>
+    </main>
+    <footer>
+      ChatVerse · Live proof first. Clearly labeled simulation second. Working consequences
+      throughout.
+    </footer>
+  </body>
+</html>

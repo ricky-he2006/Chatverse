@@ -1,3 +1,4 @@
+import { deterministicHerald, heraldDefaults } from '../shared/herald';
 import {
   growthFor,
   GROWTH_RULESET,
@@ -7,6 +8,7 @@ import {
 } from '../shared/expansion';
 import { DatabaseSync } from 'node:sqlite';
 import { realmIdentity } from '../shared/realms';
+import type { ChapterProposal } from '../shared/companion';
 import { SUPPORTER_RANKS, type SupporterStatus, type SupporterTier } from '../shared/supporters';
 import { readFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
@@ -80,7 +82,7 @@ export class World extends EventEmitter {
     this.db.exec('PRAGMA journal_mode=WAL; PRAGMA busy_timeout=3000;');
     this.db.exec(readFileSync(new URL('./schema.sql', import.meta.url), 'utf8'));
     const env = this.get('SELECT * FROM environment WHERE id=1');
-    if (env && (env.mode !== mode || ![1, 2, 3].includes(env.version))) {
+    if (env && (env.mode !== mode || ![1, 2, 3, 4, 5].includes(env.version))) {
       this.db.close();
       throw new Error('Database environment or schema mismatch');
     }
@@ -97,7 +99,7 @@ export class World extends EventEmitter {
       this.syncGrowth();
       this.ensureChallenges();
       this.seedSupporters();
-      this.run('UPDATE environment SET version=3 WHERE id=1');
+      this.run('UPDATE environment SET version=5 WHERE id=1');
       this.run("UPDATE narrative_jobs SET status='template' WHERE status='requested'");
       this.run("UPDATE outbox SET status='unknown' WHERE status='queued'");
     });
@@ -183,7 +185,7 @@ export class World extends EventEmitter {
     });
   }
   settings(): Settings {
-    return JSON.parse(this.setting('config')!);
+    const saved = JSON.parse(this.setting('config')!); return {...saved, herald: {...heraldDefaults,...saved.herald}};
   }
   updateSettings(patch: Partial<Settings>) {
     return this.atomic(() => {
@@ -210,6 +212,8 @@ export class World extends EventEmitter {
         this.now(),
       ).lastInsertRowid,
     );
+    const spoken = deterministicHerald.compose({type,title,body});
+    if (spoken) this.run('INSERT INTO herald_events VALUES (?,?,?,?)',id,spoken.text,spoken.priority,this.now());
     if (['battle', 'election', 'season'].includes(type)) {
       this.run('INSERT INTO narrative_jobs(event_id) VALUES (?)', id);
       if (this.mode === 'live' && this.settings().chatOutput && !this.settings().quiet)
@@ -711,7 +715,22 @@ export class World extends EventEmitter {
       let message = '';
       if (cmd.type === 'join') {
         id = this.join(actor.subject, actor.name, cmd.argument as Faction);
-        message = `Welcome to ${FACTIONS[this.character(id, false).kingdom].name}. Try !class rogue, then !pledge.`;
+        const citizen = this.character(id, false);
+        const chapter = this.get(
+          "SELECT id FROM chapters WHERE status='open' AND ? IN(attacker,defender) AND deadline>?",
+          citizen.kingdom,
+          this.now(),
+        );
+        let next = 'Use !profile for your next upgrade.';
+        if (chapter) {
+          const state = this.chapter(chapter.id, id);
+          if (!state.myPledge) next = 'Join the open council with !pledge.';
+          else if (!state.myVote)
+            next = 'Your pledge is saved. Choose !vote attack, !vote defend or !vote raid.';
+        }
+        message = user
+          ? `Welcome back, level ${citizen.level} ${citizen.class} of ${FACTIONS[citizen.kingdom].name}. ${next}`
+          : `You joined ${FACTIONS[citizen.kingdom].name} as a Vanguard with an Ironbound Blade. ${next}`;
       } else {
         if (!id)
           throw new RuleError('Your story starts with !join north, !join east, or !join west.');
@@ -936,17 +955,34 @@ export class World extends EventEmitter {
         seed,
         this.now(),
       );
-      this.event(
+      const openingEvent = this.event(
         'chapter',
         'The banners are called',
         `${FACTIONS[attacker].name} challenges ${FACTIONS[owner.owner as Faction].name} at ${t.name}. Pledge and choose your tactic.`,
         attacker,
       );
+      if (this.mode === 'live' && this.settings().chatOutput && !this.settings().quiet) {
+        const invitation = `${t.name}: ${FACTIONS[attacker].name} vs ${FACTIONS[owner.owner as Faction].name}. New? !join ${attacker} or !join ${owner.owner}. Then !pledge and !vote attack, !vote defend or !vote raid.`;
+        this.run(
+          'INSERT INTO chapter_broadcasts(chapter_id,opening_event_id) VALUES (?,?)',
+          id,
+          openingEvent,
+        );
+        this.run(
+          'INSERT INTO outbox(event_id,body,created_at) VALUES (?,?,?)',
+          openingEvent,
+          invitation,
+          this.now(),
+        );
+      }
       return id;
     });
   }
   chapter(id: string, persona?: string): Chapter {
-    const ch = this.get('SELECT * FROM chapters WHERE id=?', id);
+    const ch = this.get(
+      'SELECT ch.*, b.resumed_at FROM chapters ch LEFT JOIN chapter_broadcasts b ON b.chapter_id=ch.id WHERE ch.id=?',
+      id,
+    );
     if (!ch) throw new RuleError('Chapter not found.', 'NOT_FOUND', 404);
     const pledged = { north: 0, east: 0, west: 0 };
     for (const r of this.all(
@@ -970,6 +1006,7 @@ export class World extends EventEmitter {
       deadline: ch.deadline,
       remaining: ch.remaining,
       createdAt: ch.created_at,
+      resumedAt: ch.resumed_at,
       resolvedAt: ch.resolved_at,
       pledged,
       votes: ch.status === 'resolved' ? votes : null,
@@ -998,13 +1035,18 @@ export class World extends EventEmitter {
           ch.deadline - this.now(),
           id,
         );
-      else if (action === 'resume' && ch.status === 'paused')
+      else if (action === 'resume' && ch.status === 'paused') {
         this.run(
           "UPDATE chapters SET status='open',deadline=?,remaining=NULL WHERE id=?",
           this.now() + ch.remaining,
           id,
         );
-      else if (action === 'cancel' && ['open', 'paused'].includes(ch.status)) {
+        this.run(
+          'INSERT INTO chapter_broadcasts(chapter_id,resumed_at) VALUES (?,?) ON CONFLICT(chapter_id) DO UPDATE SET resumed_at=excluded.resumed_at',
+          id,
+          this.now(),
+        );
+      } else if (action === 'cancel' && ['open', 'paused'].includes(ch.status)) {
         this.run("UPDATE chapters SET status='cancelled',resolved_at=? WHERE id=?", this.now(), id);
         this.event(
           'chapter',
@@ -1012,6 +1054,11 @@ export class World extends EventEmitter {
           'No battle was fought. No rewards or territory changed.',
         );
       } else throw new RuleError('This chapter cannot perform that action in its current state.');
+      if (action !== 'resume')
+        this.run(
+          "UPDATE outbox SET status='expired' WHERE event_id=(SELECT opening_event_id FROM chapter_broadcasts WHERE chapter_id=?) AND status IN('pending','queued')",
+          id,
+        );
     });
   }
   settleChapter(id: string) {
@@ -1023,6 +1070,13 @@ export class World extends EventEmitter {
         id,
       );
       const sides = [ch.attacker, ch.defender].map((kingdom: Faction) => {
+        const districtLevel =
+          kingdom === ch.defender
+            ? (this.get(
+                'SELECT level FROM territory_development WHERE territory_id=?',
+                ch.territory,
+              )?.level ?? 0)
+            : 0;
         const pledged = allParticipants.filter((p) => p.kingdom === kingdom);
         const roster = selectRoster(
           pledged.map((p) => {
@@ -1039,6 +1093,7 @@ export class World extends EventEmitter {
         ))
           votes[v.tactic as Tactic] = v.n;
         return {
+          districtLevel,
           kingdom,
           tactic: tacticFor(votes),
           roster,
@@ -1051,10 +1106,12 @@ export class World extends EventEmitter {
             this.get('SELECT high_water FROM kingdom_growth WHERE kingdom=?', kingdom)
               ?.high_water ?? 0,
           ).healthBonusBp,
-          maxHealth: growthFor(
-            this.get('SELECT high_water FROM kingdom_growth WHERE kingdom=?', kingdom)
-              ?.high_water ?? 0,
-          ).fortressHealth,
+          maxHealth:
+            growthFor(
+              this.get('SELECT high_water FROM kingdom_growth WHERE kingdom=?', kingdom)
+                ?.high_water ?? 0,
+            ).fortressHealth +
+            districtLevel * 60,
         };
       });
       if (sides.some((s) => !s.roster.length)) {
@@ -1068,7 +1125,7 @@ export class World extends EventEmitter {
       }
       const input: BattleInput = {
         seed: ch.seed,
-        ruleset: GROWTH_RULESET,
+        ruleset: sides.some((side) => side.districtLevel > 0) ? 'chatverse-v3' : GROWTH_RULESET,
         attacker: ch.attacker,
         defender: ch.defender,
         territory: ch.territory,
@@ -1088,6 +1145,8 @@ export class World extends EventEmitter {
         this.day(),
         ch.territory,
       );
+      if (result.winner === ch.attacker)
+        this.run('DELETE FROM territory_development WHERE territory_id=?', ch.territory);
       const pairCount = this.get(
         "SELECT COUNT(*) n FROM chapters WHERE status='resolved' AND ((attacker=? AND defender=?) OR (attacker=? AND defender=?)) AND resolved_at>=?",
         ch.attacker,
@@ -1127,16 +1186,26 @@ export class World extends EventEmitter {
       const body = result.winner
         ? `${FACTIONS[result.winner].name} prevailed at ${territory} with ${sides.find((s) => s.kingdom === result.winner)!.tactic}. ${result.winner === ch.attacker ? 'The territory has a new banner.' : 'The defending banner holds.'}`
         : `The armies drew at ${territory}. Its banner remains unchanged.`;
-      this.event('battle', title, body, result.winner);
+      const battleEvent = this.event('battle', title, body, result.winner);
+      if (result.maxHealthA && result.maxHealthB) {
+        const combat = ` ${FACTIONS[ch.attacker as Faction].name} has ${result.healthA} of ${result.maxHealthA} fortress health. ${FACTIONS[ch.defender as Faction].name} has ${result.healthB} of ${result.maxHealthB}.`;
+        this.run('UPDATE herald_events SET text=text || ? WHERE event_id=?', combat, battleEvent);
+      }
       return result;
     });
   }
-  simulatePledges() {
+  simulatePledges(expectedId?: string) {
     if (this.mode !== 'simulation')
       throw new RuleError('Synthetic citizens cannot enter Live.', 'MODE_ISOLATION', 403);
     return this.atomic(() => {
       const ch = this.get("SELECT * FROM chapters WHERE status='open'");
       if (!ch || this.now() >= ch.deadline) throw new RuleError('Open a chapter first.');
+      if (expectedId && ch.id !== expectedId)
+        throw new RuleError(
+          'This is not the active battle. Open the current battle.',
+          'STALE',
+          409,
+        );
       for (const faction of [ch.attacker, ch.defender]) {
         const chars = this.all(
           'SELECT id FROM characters WHERE kingdom=? ORDER BY id LIMIT 38',
@@ -1166,6 +1235,33 @@ export class World extends EventEmitter {
         'The council gathers',
         'Synthetic citizens have pledged and cast ballots. Results remain hidden until lock.',
       );
+    });
+  }
+  completeSimulationBattle(id: string) {
+    if (this.mode !== 'simulation')
+      throw new RuleError('Simulated battles cannot run in Live.', 'MODE_ISOLATION', 403);
+    this.tick();
+    return this.atomic(() => {
+      const ch = this.chapter(id);
+      if (ch.status === 'resolved') return ch;
+      if (ch.status !== 'open')
+        throw new RuleError(
+          ch.status === 'paused'
+            ? 'Resume this battle before simulating it.'
+            : 'This battle has closed. Plan a new battle.',
+          'BATTLE_CLOSED',
+          409,
+        );
+      this.simulatePledges(id);
+      const rallied = this.chapter(id);
+      if (!rallied.pledged[ch.attacker] || !rallied.pledged[ch.defender])
+        throw new RuleError(
+          'Both kingdoms need citizens. Add citizens to each side before running a simulated battle.',
+          'EMPTY_ARMY',
+          409,
+        );
+      this.advance(Math.max(1, Math.ceil((ch.deadline - this.now()) / 1000)));
+      return this.chapter(id);
     });
   }
   openElection(kingdom: Faction) {
@@ -1324,6 +1420,184 @@ export class World extends EventEmitter {
       );
     });
   }
+  proposals(kingdom?: Faction): ChapterProposal[] {
+    return this.all(
+      'SELECT p.*,u.name FROM chapter_proposals p JOIN characters c ON c.id=p.character_id JOIN users u ON u.id=c.user_id WHERE (? IS NULL OR p.kingdom=?) ORDER BY p.created_at DESC,p.id LIMIT 20',
+      kingdom ?? null,
+      kingdom ?? null,
+    ).map((p) => ({
+      id: p.id,
+      characterId: p.character_id,
+      name: p.name,
+      kingdom: p.kingdom,
+      territory: p.territory,
+      status: p.status,
+      reason: p.reason,
+      createdAt: p.created_at,
+      chapterId: p.chapter_id,
+    }));
+  }
+  upgradeDistrict(characterId: string, target: string, expectedLevel: number, key: string) {
+    const existing = this.get('SELECT result FROM receipts WHERE key=?', key);
+    if (existing) return JSON.parse(existing.result);
+    this.tick();
+    return this.atomic(() => {
+      const c = this.character(characterId, false),
+        territory = WORLD_TERRITORIES.find((t) => t.id === target),
+        row = this.get('SELECT owner FROM territories WHERE id=?', target);
+      if (!territory || !row || territory.capital)
+        throw new RuleError('Choose an unlocked border territory.');
+      if (row.owner !== c.kingdom)
+        throw new RuleError(
+          'Only citizens of the owning kingdom can fund this territory.',
+          'FORBIDDEN',
+          403,
+        );
+      const level =
+        this.get('SELECT level FROM territory_development WHERE territory_id=?', target)?.level ??
+        0;
+      if (!Number.isInteger(expectedLevel) || expectedLevel !== level)
+        throw new RuleError(
+          'This territory changed. Reload and confirm the current upgrade cost.',
+          'CONFLICT',
+          409,
+        );
+      if (level >= 3) throw new RuleError('This territory is fully fortified.');
+      const cost = 100 + 50 * level;
+      if (c.gold < cost)
+        throw new RuleError(`This upgrade costs ${cost} gold. Your balance is ${c.gold}.`);
+      this.run('UPDATE characters SET gold=gold-?,version=version+1 WHERE id=?', cost, c.id);
+      this.run(
+        'INSERT INTO territory_development VALUES (?,?) ON CONFLICT(territory_id) DO UPDATE SET level=excluded.level',
+        target,
+        level + 1,
+      );
+      this.run(
+        'INSERT INTO ledger(character_id,delta,balance_after,reason,source_id,created_at) VALUES (?,?,?,?,?,?)',
+        c.id,
+        -cost,
+        c.gold - cost,
+        'district_upgrade',
+        key,
+        this.now(),
+      );
+      this.event(
+        'development',
+        `${territory.name} fortified`,
+        `${c.name} funded level ${level + 1} fortifications for ${FACTIONS[c.kingdom].name}. Defending this territory adds ${(level + 1) * 60} fortress HP.`,
+        c.kingdom,
+      );
+      const result = {
+        message: `${territory.name} is fortified to level ${level + 1}. ${cost} gold spent.`,
+        level: level + 1,
+      };
+      this.run('INSERT INTO receipts VALUES (?,?,?)', key, JSON.stringify(result), this.now());
+      return result;
+    });
+  }
+  proposeChapter(characterId: string, target: string) {
+    return this.atomic(() => {
+      const c = this.character(characterId, false);
+      if (
+        !this.get(
+          'SELECT 1 FROM lords WHERE character_id=? AND kingdom=? AND starts_at<=? AND ends_at>?',
+          c.id,
+          c.kingdom,
+          this.now(),
+          this.now(),
+        )
+      )
+        throw new RuleError(
+          'Only the current elected Lord can propose a chapter.',
+          'FORBIDDEN',
+          403,
+        );
+      const territory = WORLD_TERRITORIES.find((t) => t.id === target),
+        row = this.get('SELECT * FROM territories WHERE id=?', target);
+      if (
+        !territory ||
+        !row ||
+        territory.capital ||
+        row.owner === c.kingdom ||
+        row.last_session === this.day() ||
+        !territory.neighbors.some(
+          (id) => this.get('SELECT owner FROM territories WHERE id=?', id)?.owner === c.kingdom,
+        )
+      )
+        throw new RuleError('Choose an adjacent enemy-held border that is not resting.');
+      if (
+        this.get(
+          'SELECT 1 FROM chapter_proposals WHERE character_id=? AND session=?',
+          c.id,
+          this.day(),
+        )
+      )
+        throw new RuleError('Lords may submit one proposal per UTC campaign day.');
+      const id = randomUUID();
+      this.run(
+        "INSERT INTO chapter_proposals VALUES (?,?,?,?,?,'pending',NULL,?,NULL)",
+        id,
+        c.id,
+        c.kingdom,
+        target,
+        this.day(),
+        this.now(),
+      );
+      this.event(
+        'proposal',
+        'A proposal from the council',
+        `${c.name} proposes a chapter at ${territory.name}. The streamer will decide.`,
+        c.kingdom,
+      );
+      return { id };
+    });
+  }
+  reviewProposal(id: string, action: 'accept' | 'dismiss', reason: string) {
+    return this.atomic(() => {
+      const proposal = this.get(
+        "SELECT * FROM chapter_proposals WHERE id=? AND status='pending'",
+        id,
+      );
+      if (!proposal)
+        throw new RuleError('This proposal is no longer awaiting review.', 'NOT_FOUND', 404);
+      if (action === 'accept') {
+        if (
+          !this.get(
+            'SELECT 1 FROM lords WHERE character_id=? AND kingdom=? AND ends_at>?',
+            proposal.character_id,
+            proposal.kingdom,
+            this.now(),
+          )
+        )
+          throw new RuleError(
+            'The proposing Lord is no longer in office. Dismiss this proposal instead.',
+          );
+        const chapterId = this.createChapter(proposal.kingdom, proposal.territory);
+        this.run(
+          "UPDATE chapter_proposals SET status='accepted',reason=?,chapter_id=? WHERE id=?",
+          reason || 'Accepted by the streamer.',
+          chapterId,
+          id,
+        );
+        return { chapterId };
+      }
+      if (reason.trim().length < 5)
+        throw new RuleError('Give a short public reason for dismissing the proposal.');
+      this.run(
+        "UPDATE chapter_proposals SET status='dismissed',reason=? WHERE id=?",
+        reason.trim(),
+        id,
+      );
+      this.event(
+        'proposal',
+        'The streamer reviewed a proposal',
+        reason.trim(),
+        proposal.kingdom,
+        'streamer',
+      );
+      return { ok: true };
+    });
+  }
   tick() {
     if ((this.get('SELECT MAX(expires_at) n FROM challenges')?.n ?? Infinity) <= this.now())
       this.atomic(() => this.ensureChallenges());
@@ -1348,23 +1622,26 @@ export class World extends EventEmitter {
     if (
       config.autoChapters &&
       !config.quiet &&
+      (this.mode === 'simulation' || this.integration().connected) &&
       !this.get("SELECT 1 FROM chapters WHERE status IN('open','paused')") &&
       this.now() - Number(this.setting('lastAutoChapter') ?? this.now()) >= 1800000
     ) {
       this.atomic(() => {
         this.set('lastAutoChapter', this.now());
+        const activeFactions = new Set(this.all(
+          'SELECT DISTINCT kingdom FROM characters WHERE last_active>?',
+          this.now() - 900000,
+        ).map((row) => row.kingdom));
         for (const f of Object.keys(FACTIONS) as Faction[]) {
+          if (!activeFactions.has(f)) continue;
           const target = WORLD_TERRITORIES.find(
-            (t) =>
-              !t.capital &&
-              !!this.get('SELECT 1 FROM territories WHERE id=?', t.id) &&
-              this.get('SELECT owner,last_session FROM territories WHERE id=?', t.id)?.owner !==
-                f &&
-              this.get('SELECT last_session FROM territories WHERE id=?', t.id)?.last_session !==
-                this.day() &&
-              t.neighbors.some(
+            (t) => {
+              const land = this.get('SELECT owner,last_session FROM territories WHERE id=?', t.id);
+              return !t.capital && land && land.owner !== f && activeFactions.has(land.owner)
+                && land.last_session !== this.day() && t.neighbors.some(
                 (id) => this.get('SELECT owner FROM territories WHERE id=?', id)?.owner === f,
-              ),
+              );
+            },
           );
           if (target) {
             this.createChapter(f, target.id);
@@ -1602,7 +1879,18 @@ export class World extends EventEmitter {
       this.get('SELECT 1 FROM territories WHERE id=?', t.id),
     ).map((t) => {
       const row = this.get('SELECT owner,last_session FROM territories WHERE id=?', t.id)!;
-      return { ...t, owner: row.owner, contestedToday: row.last_session === this.day() };
+      const level =
+        this.get('SELECT level FROM territory_development WHERE territory_id=?', t.id)?.level ?? 0;
+      return {
+        ...t,
+        owner: row.owner,
+        contestedToday: row.last_session === this.day(),
+        development: {
+          level,
+          healthBonus: level * 60,
+          nextCost: t.capital || level >= 3 ? null : 100 + 50 * level,
+        },
+      };
     });
     return {
       worldVersion: 2,

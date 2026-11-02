@@ -1,5 +1,9 @@
 # Frontend and experience specification
 
+October 28 implementation: [Living Atlas design audit, decisions and screenshots](DESIGN_REVIEW.md). Current shared tokens are in `src/living-atlas.css`; the ownership map now uses generated SVG cells and authoritative territory data. This supersedes older visual-token suggestions below. [Asset registry](ASSET_REGISTRY.md).
+
+The implemented owner/viewer split and screen details are in [EXPERIENCE_PLAN.md](EXPERIENCE_PLAN.md). Stream room is the default; system management lives Backstage. Citizen and Lord previews open the separate personal companion.
+
 Planning reference: [original image](assets/chatverse-reference.png). Build one coherent “illuminated campaign atlas”: dark ink surfaces, restrained luminous borders, faction heraldry and warm gold for achievements. The map, inventory, dashboard and OBS overlay are views into the same campaign, sharing terminology, badges, spacing and event components. Do not copy the reference's tiny text, dense infographic layout, illustrative arithmetic or apparent game telemetry.
 
 ## Design system

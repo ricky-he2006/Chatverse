@@ -1,5 +1,11 @@
 # Build status and verification record
 
+## Current status — November 2, 2026
+
+The dated notes below record earlier implementation phases and their test counts; they are historical, not the current suite total. The most recent full verification recorded for this checkout passed **103 automated tests**, TypeScript, and the production Vite build. Royal Herald now generates local Windows speech from persisted canonical events and falls back to readable captions. The user connected the local Twitch app; native OBS audio routing and an independently recorded real-viewer end-to-end session are not certified by Simulation tests. See [Final Release Verification](FINAL_RELEASE_VERIFICATION.md) and [Royal Herald](ROYAL_HERALD.md).
+
+The source checkout has no Git remote configured. No code has been pushed or published from this checkout.
+
 Implementation session began October 26, 2026, America/New_York, after the owner approved building. This file distinguishes working code from the broader planning destination. No Twitch credentials were supplied and no messages were sent to a real Twitch channel during this build.
 
 ## Working scope

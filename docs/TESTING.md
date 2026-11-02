@@ -1,5 +1,7 @@
 # Testing, security and acceptance plan
 
+**Latest experience-split verification:** TypeScript and production build pass; all **66 tests** pass, including `tests/companion.test.ts`. Browser QA covers citizen upgrades, elected Lord proposals, owner acceptance, citizen pledge/sealed vote, and desktop/390px layouts using separate QA data. See [the implemented acceptance record](EXPERIENCE_PLAN.md#setup-and-verification). Loopback stream tests need local socket access. Twitch provider responses are mocked until real credentials are supplied.
+
 These are planned checks, not executed application test results. During planning only environment inspection, documentation research and document verification are possible because the repository has no implementation. Test the same engine under both adapters; never assert correctness merely because a UI animation played.
 
 ## Test layers and fixtures
@@ -89,3 +91,12 @@ Document test hardware, OS, runtime, driver/SQLite versions and dataset hash. Se
 ## October 27 audit verification
 
 The implemented suite now contains 56 tests. [AUDIT.md](AUDIT.md) records scope, fixes, browser checks, backup verification and benchmark results. `tests/audit.test.ts` includes actual loopback SSE connections; restricted sandboxes need local networking permission for those tests. Twitch/AI calls remain mocked. Passing this suite does not replace a real broadcaster authorization, EventSub reconnect and native OBS preflight.
+
+## October 29 execution record
+TypeScript and production build pass; 77 Node test-runner tests pass. Current tests use node:test with Fastify injection and real temporary SQLite where appropriate; the earlier Vitest/Playwright list is a planning proposal. See DESIGN_CAMPAIGN_REVIEW.md for browser visual checks and WORLDWIDE_CHALLENGES.md for implemented race/development behavior.
+
+## October 30 repair verification
+82 tests pass; TypeScript/build pass. Browser verification covers a complete 180-second battle, replay, separate overlay updates and test announcements. See BATTLE_OVERLAY_REPAIR.md.
+
+## Judge rehearsal kit verification
+84 tests pass; TypeScript and production build pass. The new fixture test runs a real earned-gold weapon purchase, district funding, resume, battle completion and deterministic replay, and confirms empty Live data. Existing-directory preparation is rejected without touching files. Browser QA confirms the guide's live/video switch, start/pause/reset timer, named-window app links and a fresh 720-citizen realm with the three-minute Frostpass vote paused. The ready rehearsal was left unspent for the presenter. The recording kit is not an MP4; genuine Twitch proof and native OBS recording remain presenter tasks.

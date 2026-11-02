@@ -1,3 +1,9 @@
+import { BattlePlayback } from './BattlePlayback';
+import { StreamerRoom } from './StreamerRoom';
+import { Overlay } from './Overlay';
+import { WorldTaskBoard } from './WorldTasks';
+
+import { overlayPresentation } from '../shared/overlay';
 import {
   useCallback,
   useEffect,
@@ -99,6 +105,7 @@ import {
 } from './ui';
 
 type Screen =
+  | 'world-tasks'
   | 'overview'
   | 'atlas'
   | 'world'
@@ -111,6 +118,7 @@ type Screen =
   | 'steward'
   | 'settings';
 const navigation: { id: Screen; label: string; icon: typeof Home }[] = [
+  { id: 'world-tasks', label: 'World races', icon: Trophy },
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'atlas', label: 'World atlas', icon: Compass },
   { id: 'world', label: 'Realm map', icon: Map },
@@ -122,6 +130,13 @@ const navigation: { id: Screen; label: string; icon: typeof Home }[] = [
   { id: 'chronicle', label: 'Chronicle', icon: BookOpen },
   { id: 'steward', label: 'AI Steward', icon: Sparkles },
   { id: 'settings', label: 'Settings', icon: SettingsIcon },
+];
+const destinations: { label: string; icon: typeof Home; screens: Screen[] }[] = [
+  { label: 'World', icon: Compass, screens: ['world', 'atlas', 'kingdoms'] },
+  { label: 'War Room', icon: Swords, screens: ['battles', 'world-tasks'] },
+  { label: 'Citizens', icon: Users, screens: ['citizens', 'character', 'leaderboard'] },
+  { label: 'Chronicle', icon: BookOpen, screens: ['chronicle'] },
+  { label: 'Studio', icon: Monitor, screens: ['overview', 'settings', 'steward'] },
 ];
 type ModalState = {
   kind:
@@ -137,7 +152,8 @@ type ModalState = {
   item?: string;
   faction?: Faction;
 } | null;
-type Context = {
+export type Context = {
+  openOverlay: () => void;
   s: WorldSnapshot;
   openRealm: (id: string) => void;
   hero: Character | null;
@@ -173,6 +189,13 @@ export function App() {
       ? (initial.get('screen') as Screen)
       : 'overview',
   );
+  const [experience, setExperience] = useState<'streamer' | 'system'>(
+    initial.get('view') === 'system' ||
+      ['steward', 'settings'].includes(initial.get('screen') ?? '')
+      ? 'system'
+      : 'streamer',
+  );
+  const [settingsTab, setSettingsTab] = useState('integration');
   const [unlocked, setUnlocked] = useState<boolean | null>(null),
     [unlockCode, setUnlockCode] = useState(''),
     [loginError, setLoginError] = useState('');
@@ -307,10 +330,13 @@ export function App() {
       cancelled = true;
     };
   }, [mode, realm, persona, snapshot, unlocked]);
-  const go = (next: Screen) => {
+  const go = (next: Screen, view = experience, settingsSection = 'integration') => {
+    if (next === 'settings') setSettingsTab(settingsSection);
+    const nextView = ['steward', 'settings'].includes(next) ? 'system' : view;
+    setExperience(nextView);
     setScreen(next);
     setMobileNav(false);
-    const q = new URLSearchParams({ mode, realm, screen: next });
+    const q = new URLSearchParams({ mode, realm, screen: next, view: nextView });
     history.replaceState(null, '', `/?${q}`);
     window.scrollTo({ top: 0, behavior: 'instant' });
   };
@@ -468,6 +494,7 @@ export function App() {
     );
   const ctx: Context | null = snapshot
     ? {
+        openOverlay: () => go('settings', 'system', 'overlay'),
         s: snapshot,
         openRealm,
         hero,
@@ -489,10 +516,36 @@ export function App() {
         setBattle,
       }
     : null;
+  const previewPlayer = async (lord = false, pane = 'story') => {
+    if (mode !== 'simulation') {
+      location.assign('/play?mode=live&realm=home&pane=' + encodeURIComponent(pane));
+      return;
+    }
+    const id = lord
+      ? snapshot?.kingdoms.find((k) => k.lordId)?.lordId
+      : hero && !hero.isLord
+        ? hero.id
+        : snapshot?.heroes.find((h) => !h.isLord)?.id;
+    if (!id) {
+      notify('No eligible simulated character is available.');
+      return;
+    }
+    const grant = await run(() => action('companion/previews', { characterId: id }));
+    if (grant) {
+      const target = new URL(grant.url, location.origin);
+      target.searchParams.set('pane', pane);
+      location.assign(target.pathname + target.search + target.hash);
+    }
+  };
   return (
     <div
       className={`app-shell realm-theme-${realmIdentity(realm).theme} ${mobileNav ? 'nav-open' : ''}`}
-      style={{ '--realm-accent': realmIdentity(realm).color } as CSSProperties}
+      style={
+        {
+          '--realm-accent': realmIdentity(realm).color,
+          '--realm-map-image': `url("${realmIdentity(realm).mapImage}")`,
+        } as CSSProperties
+      }
     >
       {mobileNav && (
         <button
@@ -515,7 +568,7 @@ export function App() {
             <Crown size={24} />
           </div>
           <span>
-            ChatVerse<small>THE COMMUNITY CAMPAIGN</small>
+            ChatVerse<small>COMMUNITY CAMPAIGNS</small>
           </span>
         </a>
         <div className="realm-label">YOUR WORLD</div>
@@ -538,25 +591,20 @@ export function App() {
           <ChevronDown size={14} />
         </button>
         <div className="nav-label">CAMPAIGN</div>
-        <nav aria-label="Main navigation">
-          {navigation.map((n, i) => (
-            <div key={n.id}>
-              {n.id === 'steward' && <div className="nav-label manage-label">WORLD MANAGEMENT</div>}
-              <button
-                aria-label={n.label}
-                title={n.label}
-                className={screen === n.id ? 'active' : ''}
-                onClick={() => go(n.id)}
-                aria-current={screen === n.id ? 'page' : undefined}
-              >
-                <n.icon size={18} />
-                <span>{n.label}</span>
-                {n.id === 'steward' && <span className="nav-ai">AI</span>}
-                {n.id === 'battles' && snapshot?.chapter?.status === 'open' && (
-                  <span className="nav-dot" />
-                )}
-              </button>
-            </div>
+        <nav aria-label="Main navigation" className="campaign-navigation">
+          {destinations.map((destination) => (
+            <button
+              key={destination.label}
+              className={destination.screens.includes(screen) ? 'active' : ''}
+              aria-current={destination.screens.includes(screen) ? 'page' : undefined}
+              onClick={() => go(destination.screens[0], 'streamer')}
+            >
+              <destination.icon size={20} />
+              <span>{destination.label}</span>
+              {destination.label === 'War Room' && snapshot?.chapter?.status === 'open' && (
+                <span className="nav-dot" />
+              )}
+            </button>
           ))}
         </nav>
         <div className="sidebar-bottom">
@@ -597,7 +645,13 @@ export function App() {
             <Compass size={15} />
             <span>My realm</span>
             <ChevronRight size={13} />
-            <strong>{navigation.find((n) => n.id === screen)?.label}</strong>
+            <strong>
+              {screen === 'overview'
+                ? experience === 'streamer'
+                  ? 'Stream room'
+                  : 'Backstage'
+                : navigation.find((n) => n.id === screen)?.label}
+            </strong>
           </div>
           <div className="topbar-actions">
             <div className="mode-switch" aria-label="Environment">
@@ -629,14 +683,14 @@ export function App() {
             </div>
           </div>
         </header>
-        <main className="main-content">
+        <main className={`main-content screen-${screen}`}>
           <div className={`environment-note ${mode}`}>
             <span>
               {mode === 'simulation' ? <FlaskConical size={13} /> : <Radio size={13} />}
               <strong>{mode === 'simulation' ? 'SIMULATION MODE' : 'TWITCH LIVE MODE'}</strong>
               <span className="environment-copy">
                 {mode === 'simulation'
-                  ? 'A fully interactive world with synthetic citizens. Make it your own.'
+                  ? 'Fictional communities · Progress is saved locally'
                   : snapshot?.integration.connected
                     ? `Connected to ${snapshot.integration.channel} · Real viewers. Real progress.`
                     : 'Connect your Twitch channel in Settings to welcome real citizens.'}
@@ -670,8 +724,54 @@ export function App() {
             </div>
           ) : (
             <>
-              {screen !== 'atlas' && <PageHeader ctx={ctx} screen={screen} />}
-              {screen === 'overview' && <Overview ctx={ctx} />}
+              <nav className="destination-tabs" aria-label="Section navigation">
+                {destinations
+                  .find((destination) => destination.screens.includes(screen))
+                  ?.screens.map((id) => (
+                    <button
+                      key={id}
+                      aria-current={
+                        screen === id && (id !== 'overview' || experience === 'streamer')
+                          ? 'page'
+                          : undefined
+                      }
+                      className={
+                        screen === id && (id !== 'overview' || experience === 'streamer')
+                          ? 'active'
+                          : ''
+                      }
+                      onClick={() => go(id, id === 'overview' ? 'streamer' : experience)}
+                    >
+                      {id === 'overview'
+                        ? 'Stream room'
+                        : navigation.find((item) => item.id === id)?.label}
+                    </button>
+                  ))}
+                {destinations.find((destination) => destination.screens.includes(screen))?.label ===
+                  'Studio' && (
+                  <button
+                    className={screen === 'overview' && experience === 'system' ? 'active' : ''}
+                    aria-current={
+                      screen === 'overview' && experience === 'system' ? 'page' : undefined
+                    }
+                    onClick={() => go('overview', 'system')}
+                  >
+                    Backstage
+                  </button>
+                )}
+              </nav>
+              {screen !== 'atlas' &&
+                screen !== 'overview' &&
+                screen !== 'world' &&
+                screen !== 'world-tasks' && <PageHeader ctx={ctx} screen={screen} />}
+              {screen === 'overview' && (
+                <StreamerRoom
+                  key={`${mode}:${realm}:${experience}`}
+                  ctx={ctx}
+                  backstage={experience === 'system'}
+                  preview={(lord, pane) => void previewPlayer(lord, pane)}
+                />
+              )}
               {screen === 'atlas' && (
                 <WorldAtlas
                   mode={mode}
@@ -689,7 +789,18 @@ export function App() {
               {screen === 'leaderboard' && <LeaderboardScreen ctx={ctx} />}
               {screen === 'chronicle' && <ChronicleScreen ctx={ctx} />}
               {screen === 'steward' && <StewardScreen ctx={ctx} />}
-              {screen === 'settings' && <SettingsScreen ctx={ctx} />}
+              {screen === 'world-tasks' && (
+                <WorldTaskBoard
+                  key={`${mode}:${realm}`}
+                  mode={mode}
+                  realm={realm}
+                  connected={ctx.s.integration.connected}
+                  owner
+                />
+              )}
+              {screen === 'settings' && (
+                <SettingsScreen ctx={ctx} tab={settingsTab} setTab={setSettingsTab} />
+              )}
               <footer className="page-footer">
                 <span>
                   <Crown size={12} /> A world built by its people.
@@ -721,6 +832,10 @@ export function App() {
 
 function PageHeader({ ctx, screen }: { ctx: Context; screen: Screen }) {
   const titles: Record<Screen, [string, string]> = {
+    'world-tasks': [
+      'Community world races',
+      'Game objectives, evidence review and competition between communities.',
+    ],
     overview: [
       'Your kingdom is alive.',
       'Every citizen has a story. Every stream writes a new chapter.',
@@ -733,35 +848,20 @@ function PageHeader({ ctx, screen }: { ctx: Context; screen: Screen }) {
       'A world worth fighting for.',
       'Three banners. New horizons. A realm that grows with its people.',
     ],
-    kingdoms: [
-      'Three banners. One realm.',
-      'Find your people, raise your crest, and shape the council.',
-    ],
-    citizens: [
-      'The people make the kingdom.',
-      'Adventurers, allies, and the familiar names behind every story.',
-    ],
+    kingdoms: ['Kingdoms', 'Leadership, holdings, and development across your realm.'],
+    citizens: ['Citizens', 'Find a citizen, inspect their equipment, and follow their progress.'],
     character: [
-      'Your next chapter starts here.',
-      'A little stronger. A little braver. A story all your own.',
+      'Character & equipment',
+      'Equipment, upgrades, and battle stats for the selected citizen.',
     ],
-    battles: [
-      'Let the banners fly.',
-      'A fair fight, a shared choice, and a consequence that lasts.',
-    ],
-    leaderboard: [
-      'A place in the chronicles.',
-      'Celebrate contribution. Every banner has a part to play.',
-    ],
-    chronicle: [
-      'Nothing great is forgotten.',
-      'The choices, victories, and people that shaped your world.',
-    ],
+    battles: ['War Room', 'Choose a front, rally your citizens, and review the outcome.'],
+    leaderboard: ['Season standings', 'Kingdom influence and citizen contributions this season.'],
+    chronicle: ['Chronicle', 'The choices, victories, and people that shaped your world.'],
     steward: [
-      'A voice for your world.',
-      'A little imagination. Always grounded in what really happened.',
+      'AI Steward',
+      'Narration grounded in recorded events, with a deterministic fallback.',
     ],
-    settings: ['Make the realm your own.', 'Your channel, your campaign, your pace.'],
+    settings: ['Studio settings', 'Your channel, your campaign, your pace.'],
   };
   return (
     <div className="page-heading">
@@ -799,7 +899,7 @@ function PageHeader({ ctx, screen }: { ctx: Context; screen: Screen }) {
         ) : screen === 'battles' ? (
           <Button variant="primary" onClick={() => ctx.setModal({ kind: 'chapter' })}>
             <Swords size={16} />
-            New chapter
+            Plan battle
           </Button>
         ) : screen === 'character' && ctx.s.mode === 'simulation' ? (
           <Button onClick={() => ctx.setModal({ kind: 'join' })}>
@@ -824,7 +924,7 @@ function Overview({ ctx }: { ctx: Context }) {
   return (
     <>
       <section className="welcome-banner">
-        <RealmArtwork />
+        <RealmArtwork realmId={ctx.s.realmId} />
         <div className="welcome-copy">
           <span className="eyebrow">
             <span className="tiny-line" />
@@ -918,6 +1018,7 @@ function Overview({ ctx }: { ctx: Context }) {
           />
           <div className="map-frame">
             <WorldMap
+              realmId={ctx.s.realmId}
               realmName={ctx.s.realm}
               territories={s.territories}
               compact
@@ -1357,19 +1458,13 @@ function WorldScreen({ ctx }: { ctx: Context }) {
     <div className="world-screen-grid">
       <div className="realm-map-banner">
         <div>
-          <span className="eyebrow">
-            {ctx.s.mode === 'simulation' ? 'SIMULATED STREAMER REALM' : 'YOUR CHANNEL REALM'}
-          </span>
-          <h2>{ctx.s.realm}</h2>
+          <h1>{ctx.s.realm}</h1>
           <p>
-            {ctx.s.mode === 'simulation' ? realmIdentity(ctx.s.realmId).streamer + ' · ' : ''}Three
-            kingdoms. One community. Its own persistent history.
+            {ctx.s.mode === 'simulation' ? realmIdentity(ctx.s.realmId).streamer + ' · ' : ''}
+            {num(ctx.s.citizens)} citizens · {ctx.s.territories.length} discovered territories ·
+            Season {ctx.s.season.number}
           </p>
         </div>
-        <Button onClick={() => ctx.go('atlas')}>
-          <Compass size={15} />
-          Back to world atlas
-        </Button>
       </div>
       <Panel className="full-map-panel">
         <PanelTitle
@@ -1411,6 +1506,7 @@ function WorldScreen({ ctx }: { ctx: Context }) {
           <div className="map-zoom-container">
             <div style={{ width: `${zoom * 100}%` }}>
               <WorldMap
+                realmId={ctx.s.realmId}
                 realmName={ctx.s.realm}
                 territories={ctx.s.territories}
                 selected={selected}
@@ -1422,11 +1518,20 @@ function WorldScreen({ ctx }: { ctx: Context }) {
         <div className="map-summary">
           {ctx.s.kingdoms.map((k) => (
             <span key={k.id}>
-              <i className="legend-dot" style={{ background: k.color }} />
-              {k.name}
+              <Crest faction={k.id} size={25} />
+              <span>
+                <strong>{k.name}</strong>
+                <small>
+                  {k.citizens} citizens · {num(k.fortressHealth ?? 1800)} fortress HP
+                </small>
+              </span>
             </span>
           ))}
         </div>
+        <p className="map-note">
+          Select a settlement to inspect its owner · dashed routes show battle adjacency · locks
+          mark population milestones.
+        </p>
       </Panel>
       <div className="world-growth-strip">
         <div>
@@ -1577,6 +1682,39 @@ function WorldScreen({ ctx }: { ctx: Context }) {
               ))}
           </div>
           {!t.capital && (
+            <div className="district-development">
+              <h3>Territory development · {t.development?.level ?? 0}/3</h3>
+              <p>
+                Fortifications add {t.development?.healthBonus ?? 0} HP when this territory defends.
+                Population unlocks more land; citizens fund its upgrades with gold.
+              </p>
+              <Button
+                disabled={ctx.busy}
+                onClick={async () => {
+                  if (ctx.s.mode === 'live') {
+                    location.assign('/play?mode=live&realm=home&pane=kingdom');
+                    return;
+                  }
+                  const citizen = ctx.s.heroes.find((h) => h.kingdom === t.owner);
+                  if (!citizen) {
+                    ctx.notify('Choose a citizen of this kingdom in Citizens.');
+                    return;
+                  }
+                  const grant = await ctx.run(() =>
+                    ctx.action('companion/previews', { characterId: citizen.id }),
+                  );
+                  if (grant) {
+                    const target = new URL(grant.url, location.origin);
+                    target.searchParams.set('pane', 'kingdom');
+                    location.assign(target.pathname + target.search + target.hash);
+                  }
+                }}
+              >
+                Open citizen development
+              </Button>
+            </div>
+          )}
+          {!t.capital && (
             <Button
               className="full"
               variant="primary"
@@ -1584,7 +1722,7 @@ function WorldScreen({ ctx }: { ctx: Context }) {
               onClick={() => ctx.setModal({ kind: 'chapter' })}
             >
               <Swords size={15} />
-              {t.contestedToday ? 'Border at rest' : 'Plan a chapter'}
+              {t.contestedToday ? 'Border at rest' : 'Plan battle'}
             </Button>
           )}
         </Panel>
@@ -1867,7 +2005,7 @@ function CitizensScreen({ ctx }: { ctx: Context }) {
   return (
     <Panel>
       <PanelTitle
-        title="A fellowship of familiar faces"
+        title="Citizen roster"
         eyebrow={`${num(ctx.s.citizens)} CITIZENS · ${ctx.s.mode === 'simulation' ? 'ALL SYNTHETIC' : 'REAL TWITCH IDENTITIES'}`}
         action={
           ctx.s.mode === 'simulation' ? (
@@ -2012,7 +2150,17 @@ function ItemIcon({ icon, size = 24 }: { icon: string; size?: number }) {
   ) : icon === 'charm' ? (
     <Gem size={size} />
   ) : icon === 'bow' ? (
-    <Compass size={size} />
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      aria-hidden="true"
+    >
+      <path d="M4 4c12 0 16 4 16 16L4 4Zm0 0L2 6m18 14-2 2M5 19 20 4m-6 0h6v6M3 17l4 4" />
+    </svg>
   ) : (
     <Swords size={size} />
   );
@@ -2123,7 +2271,10 @@ function CharacterScreen({ ctx }: { ctx: Context }) {
           </div>
         </Panel>
         <div className="gear-content">
-          <Panel className="supporter-hall">
+          <details className="supporter-hall campaign-guide">
+            <summary>
+              Supporter titles & ceremonial ranks <ChevronDown size={16} />
+            </summary>
             <PanelTitle title="Your place in the realm" eyebrow="SUPPORTER HONORS" />
             <p>
               Wear your support with pride. Your title, portrait trim and ceremonial banner reflect
@@ -2194,11 +2345,11 @@ function CharacterScreen({ ctx }: { ctx: Context }) {
                 while running.
               </p>
             )}
-          </Panel>
+          </details>
           <Panel className="equipment-panel">
             <PanelTitle
-              title="Ready for the next chapter"
-              eyebrow="EQUIPPED FOR THE JOURNEY"
+              title="Equipped items"
+              eyebrow="WEAPON · ARMOR · CHARM"
               action={<Gold amount={c.gold} />}
             />
             <div className="equipped-grid">
@@ -2398,28 +2549,10 @@ function BattlesScreen({ ctx }: { ctx: Context }) {
   const ch =
     (ctx.selectedBattle ? ctx.s.battles.find((b) => b.id === ctx.selectedBattle) : null) ??
     ctx.s.chapter;
-  const [showMath, setShowMath] = useState(false),
-    [round, setRound] = useState(3),
-    [playing, setPlaying] = useState(false);
-  useEffect(() => {
-    setRound(3);
-    setPlaying(false);
-  }, [ch?.id]);
-  useEffect(() => {
-    if (!playing) return;
-    const timer = setInterval(
-      () =>
-        setRound((r) => {
-          if (r >= 3) {
-            setPlaying(false);
-            return 3;
-          }
-          return r + 1;
-        }),
-      1500,
-    );
-    return () => clearInterval(timer);
-  }, [playing]);
+  const [showMath, setShowMath] = useState(false);
+  const [replaying, setReplaying] = useState(false);
+  const observed = useRef<string | null>(null);
+  if (ch && ['open', 'paused'].includes(ch.status)) observed.current = ch.id;
   const isOpen = ch?.status === 'open' || ch?.status === 'paused';
   return (
     <>
@@ -2448,118 +2581,43 @@ function BattlesScreen({ ctx }: { ctx: Context }) {
             />
           ) : (
             <>
-              <div className="battle-arena">
-                <div className="battle-arena-haze" />
-                <div
-                  className="army-side"
-                  style={{ '--faction': FACTIONS[ch.attacker].color } as CSSProperties}
-                >
-                  <Crest faction={ch.attacker} size={82} />
-                  <span className="eyebrow">THE CHALLENGER</span>
-                  <h2>{FACTIONS[ch.attacker].name}</h2>
-                  <span>{ch.pledged[ch.attacker]} pledged citizens</span>
-                  {ch.result?.maxHealthA && (
-                    <FortressMeter
-                      faction={ch.attacker}
-                      max={ch.result.maxHealthA}
-                      health={
-                        ch.result.maxHealthA -
-                        ch.result.rounds.slice(0, round).reduce((s, r) => s + r.scoreB, 0)
-                      }
-                    />
-                  )}
-                  {ch.result && (
-                    <strong className="arena-score">
-                      {num(ch.result.rounds.slice(0, round).reduce((s, r) => s + r.scoreA, 0))}
-                    </strong>
-                  )}
-                </div>
-                <div className="versus-mark">
-                  <Swords size={40} />
-                  <span>VS</span>
-                </div>
-                <div
-                  className="army-side"
-                  style={{ '--faction': FACTIONS[ch.defender].color } as CSSProperties}
-                >
-                  <Crest faction={ch.defender} size={82} />
-                  <span className="eyebrow">THE DEFENDER</span>
-                  <h2>{FACTIONS[ch.defender].name}</h2>
-                  <span>{ch.pledged[ch.defender]} pledged citizens</span>
-                  {ch.result?.maxHealthB && (
-                    <FortressMeter
-                      faction={ch.defender}
-                      max={ch.result.maxHealthB}
-                      health={
-                        ch.result.maxHealthB -
-                        ch.result.rounds.slice(0, round).reduce((s, r) => s + r.scoreA, 0)
-                      }
-                    />
-                  )}
-                  {ch.result && (
-                    <strong className="arena-score">
-                      {num(ch.result.rounds.slice(0, round).reduce((s, r) => s + r.scoreB, 0))}
-                    </strong>
-                  )}
-                </div>
-              </div>
               {ch.result ? (
+                <BattlePlayback
+                  key={ch.id}
+                  chapter={ch}
+                  autoplay={observed.current === ch.id}
+                  onPlaying={setReplaying}
+                />
+              ) : (
                 <>
-                  <div className="battle-result-banner">
-                    <Trophy size={19} />
-                    {round < 3
-                      ? `Round ${round} of 3`
-                      : ch.result.winner
-                        ? `${FACTIONS[ch.result.winner].name} prevails`
-                        : 'An honorable draw'}
-                    <span>
-                      {round < 3
-                        ? 'The chapter is unfolding…'
-                        : 'The result is settled. This replay changes no rewards.'}
-                    </span>
-                  </div>
-                  <div className="replay-controls">
-                    <Button
-                      onClick={() => {
-                        if (playing) setPlaying(false);
-                        else {
-                          setRound(0);
-                          setPlaying(true);
-                        }
-                      }}
+                  <div className="battle-arena">
+                    <div className="battle-arena-haze" />
+                    <div
+                      className="army-side"
+                      style={{ '--faction': FACTIONS[ch.attacker].color } as CSSProperties}
                     >
-                      {playing ? <Pause size={14} /> : <Play size={14} />}{' '}
-                      {playing ? 'Pause replay' : 'Replay chapter'}
-                    </Button>
-                    <span>Round {round} / 3</span>
-                    <Button
-                      variant="ghost"
-                      onClick={() => {
-                        setRound(3);
-                        setPlaying(false);
-                      }}
+                      <Crest faction={ch.attacker} size={82} />
+                      <span className="eyebrow">THE CHALLENGER</span>
+                      <h2>{FACTIONS[ch.attacker].name}</h2>
+                      <span>{ch.pledged[ch.attacker]} pledged citizens</span>
+                    </div>
+                    <div className="versus-mark">
+                      <Swords size={40} />
+                      <span>VS</span>
+                    </div>
+                    <div
+                      className="army-side"
+                      style={{ '--faction': FACTIONS[ch.defender].color } as CSSProperties}
                     >
-                      Show final result
-                    </Button>
-                  </div>
-                  <div className="round-timeline">
-                    {ch.result.rounds.map((r, i) => (
-                      <div className={round > i ? 'revealed' : ''} key={r.round}>
-                        <span>ROUND {r.round}</span>
-                        <strong>
-                          <i style={{ color: FACTIONS[ch.attacker].color }}>
-                            {round > i ? r.scoreA : '—'}
-                          </i>
-                          <span>:</span>
-                          <i style={{ color: FACTIONS[ch.defender].color }}>
-                            {round > i ? r.scoreB : '—'}
-                          </i>
-                        </strong>
-                      </div>
-                    ))}
+                      <Crest faction={ch.defender} size={82} />
+                      <span className="eyebrow">THE DEFENDER</span>
+                      <h2>{FACTIONS[ch.defender].name}</h2>
+                      <span>{ch.pledged[ch.defender]} pledged citizens</span>
+                    </div>
                   </div>
                 </>
-              ) : isOpen ? (
+              )}
+              {ch.result ? null : isOpen ? (
                 <div className="council-live-footer">
                   <div>
                     <span className="eyebrow">
@@ -2605,7 +2663,19 @@ function BattlesScreen({ ctx }: { ctx: Context }) {
                 </div>
               ) : (
                 <div className="battle-result-banner">
-                  This chapter closed without a battle. No rewards or territory changed.
+                  <div>
+                    This battle was cancelled. No rewards or territory changed.
+                    {(!ch.pledged[ch.attacker] || !ch.pledged[ch.defender]) && (
+                      <p>
+                        Both kingdoms need at least one pledged citizen before voting closes. This
+                        battle had {ch.pledged[ch.attacker]} challenger pledges and{' '}
+                        {ch.pledged[ch.defender]} defender pledges.
+                      </p>
+                    )}
+                  </div>
+                  <Button onClick={() => ctx.setModal({ kind: 'chapter' })}>
+                    Plan a new battle
+                  </Button>
                 </div>
               )}
             </>
@@ -2677,7 +2747,7 @@ function BattlesScreen({ ctx }: { ctx: Context }) {
                 <small className="muted">Results stay hidden until the council closes.</small>
                 {ctx.s.mode === 'live' && <code>!vote attack | defend | raid</code>}
               </>
-            ) : ch?.input ? (
+            ) : ch?.input && !replaying ? (
               <div className="tactic-results">
                 {ch.result?.maxHealthA && (
                   <p className="fortress-result">
@@ -2712,13 +2782,26 @@ function BattlesScreen({ ctx }: { ctx: Context }) {
                 <FlaskConical size={12} />
                 SIMULATION TOOLS
               </span>
-              <p>Explore a full chapter without waiting for real chat.</p>
+              <p>
+                {isOpen
+                  ? 'Rally both kingdoms, then run the battle. This uses the real battle engine and records rewards and territory changes in Simulation only.'
+                  : 'This battle is closed. Plan a new battle to use the simulation controls.'}
+              </p>
+              {ctx.s.chapter &&
+                ctx.s.chapter.id !== ch?.id &&
+                ['open', 'paused'].includes(ctx.s.chapter.status) && (
+                  <Button onClick={() => ctx.setBattle(ctx.s.chapter!.id)}>
+                    View current battle
+                  </Button>
+                )}
               <Button
                 className="full"
-                disabled={!isOpen || ch?.status !== 'open' || ctx.busy}
+                disabled={
+                  !isOpen || ch?.status !== 'open' || ch.id !== ctx.s.chapter?.id || ctx.busy
+                }
                 onClick={() =>
                   ctx.run(
-                    () => ctx.action('populate-chapter'),
+                    () => ctx.action('populate-chapter', { chapterId: ch!.id }),
                     'Synthetic citizens joined the council.',
                   )
                 }
@@ -2728,22 +2811,31 @@ function BattlesScreen({ ctx }: { ctx: Context }) {
               </Button>
               <Button
                 className="full"
-                disabled={ctx.busy}
+                variant="primary"
+                disabled={
+                  !isOpen || ch?.status !== 'open' || ch.id !== ctx.s.chapter?.id || ctx.busy
+                }
                 onClick={() =>
                   ctx.run(
-                    () => ctx.action('advance', { seconds: 65 }),
-                    'Simulation advanced 65 seconds.',
+                    () => ctx.action(`chapters/${ch!.id}/complete`),
+                    'Both armies rallied. Battle resolved and recorded.',
                   )
                 }
               >
                 <ArrowRight size={14} />
-                Advance 65 seconds
+                Run full simulated battle
               </Button>
+              {ch?.status === 'paused' && <p>Resume the battle to enable these controls.</p>}
+              {!isOpen && (
+                <Button className="full" onClick={() => ctx.setModal({ kind: 'chapter' })}>
+                  Plan a new battle
+                </Button>
+              )}
             </Panel>
           )}
         </div>
       </div>
-      {ch?.result && (
+      {ch?.result && !replaying && (
         <Panel className="space-top">
           <button className="calculation-toggle" onClick={() => setShowMath(!showMath)}>
             <span>
@@ -2820,39 +2912,41 @@ function BattlesScreen({ ctx }: { ctx: Context }) {
         <PanelTitle title="Chapters already written" eyebrow="BATTLE HISTORY" />
         {ctx.s.battles.length ? (
           <div className="battle-history">
-            {ctx.s.battles.map((ch) => (
-              <button
-                key={ch.id}
-                className={ctx.selectedBattle === ch.id ? 'selected' : ''}
-                onClick={() => {
-                  ctx.setBattle(ch.id);
-                  window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-              >
-                <div className="history-crests">
-                  <Crest faction={ch.attacker} size={25} />
-                  <Swords size={13} />
-                  <Crest faction={ch.defender} size={25} />
-                </div>
-                <span>
-                  <strong>{ctx.s.territories.find((t) => t.id === ch.territory)?.name}</strong>
-                  <small>
-                    {date(ch.createdAt)} ·{' '}
-                    {ch.status === 'cancelled'
-                      ? 'No battle fought'
-                      : ch.result?.winner
-                        ? `${ch.result.winner} prevailed`
-                        : 'Draw'}
-                  </small>
-                </span>
-                {ch.result && (
-                  <strong className="history-score">
-                    {ch.result.scoreA} : {ch.result.scoreB}
-                  </strong>
-                )}
-                <ArrowUpRight size={15} />
-              </button>
-            ))}
+            {ctx.s.battles
+              .filter((b) => !replaying || b.id !== ch?.id)
+              .map((ch) => (
+                <button
+                  key={ch.id}
+                  className={ctx.selectedBattle === ch.id ? 'selected' : ''}
+                  onClick={() => {
+                    ctx.setBattle(ch.id);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                >
+                  <div className="history-crests">
+                    <Crest faction={ch.attacker} size={25} />
+                    <Swords size={13} />
+                    <Crest faction={ch.defender} size={25} />
+                  </div>
+                  <span>
+                    <strong>{ctx.s.territories.find((t) => t.id === ch.territory)?.name}</strong>
+                    <small>
+                      {date(ch.createdAt)} ·{' '}
+                      {ch.status === 'cancelled'
+                        ? 'No battle fought'
+                        : ch.result?.winner
+                          ? `${ch.result.winner} prevailed`
+                          : 'Draw'}
+                    </small>
+                  </span>
+                  {ch.result && (
+                    <strong className="history-score">
+                      {ch.result.scoreA} : {ch.result.scoreB}
+                    </strong>
+                  )}
+                  <ArrowUpRight size={15} />
+                </button>
+              ))}
           </div>
         ) : (
           <Empty
@@ -3041,7 +3135,7 @@ function ChronicleScreen({ ctx }: { ctx: Context }) {
   return (
     <Panel>
       <PanelTitle
-        title="The chronicle of Everfall"
+        title={`${ctx.s.realm} chronicle`}
         eyebrow="REAL CHOICES. LASTING STORIES."
         action={
           <Button onClick={() => ctx.setModal({ kind: 'announcement' })}>
@@ -3269,9 +3363,19 @@ function StewardScreen({ ctx }: { ctx: Context }) {
   );
 }
 
-function SettingsScreen({ ctx }: { ctx: Context }) {
-  const [tab, setTab] = useState('integration'),
-    [overlayUrl, setOverlayUrl] = useState(''),
+function SettingsScreen({
+  ctx,
+  tab,
+  setTab,
+}: {
+  ctx: Context;
+  tab: string;
+  setTab: (value: string) => void;
+}) {
+  const [overlayUrl, setOverlayUrl] = useState(''),
+    [overlayAnchor, setOverlayAnchor] = useState('top-right'),
+    [overlayMotion, setOverlayMotion] = useState(true),
+    [overlayPinned, setOverlayPinned] = useState(false),
     [subscriberInfo, setSubscriberInfo] = useState<any>(null);
   const integration = ctx.s.integration;
   const copy = async (text: string) => {
@@ -3351,10 +3455,14 @@ function SettingsScreen({ ctx }: { ctx: Context }) {
                 description="Core scopes: user:read:chat and user:write:chat. Outbound replies send as your broadcaster only when enabled."
               />
               <SetupStep
-                done={!!integration.lastEventAt}
+                done={integration.connected && !!integration.lastAcceptedJoin}
                 number="04"
                 title="Welcome a real citizen"
-                description="In your Twitch chat, type !join north. Watch the citizen appear, then try !profile and !pledge."
+                description={
+                  integration.connected && integration.lastAcceptedJoin
+                    ? `${integration.lastAcceptedJoin.name} · ${integration.lastAcceptedJoin.kingdom} · join saved at ${time(integration.lastAcceptedJoin.at)}.`
+                    : 'Ask a viewer to send !join north in this channel. This step checks for a saved citizen from an accepted Twitch command.'
+                }
               />
             </div>
             <div className="integration-status-card">
@@ -3475,17 +3583,19 @@ function SettingsScreen({ ctx }: { ctx: Context }) {
             <div className="overlay-preview">
               <div className="overlay-safe-zone">
                 <span>1920 × 1080 · TRANSPARENT CANVAS</span>
-                <div className="overlay-preview-widget">
-                  <Crest faction="north" size={26} />
-                  <div>
-                    <strong>
-                      North Kingdom <Swords size={12} /> East Kingdom
-                    </strong>
-                    <small>Your next chapter is waiting.</small>
-                  </div>
-                  <Crest faction="east" size={26} />
+                <div
+                  className="actual-overlay-preview"
+                  role="region"
+                  aria-label="Actual realm overlay preview"
+                >
+                  <Overlay
+                    embedded
+                    mode={ctx.s.mode}
+                    realm={ctx.s.realmId ?? 'home'}
+                    presentation={`anchor=${overlayAnchor}&motion=${overlayMotion ? 'on' : 'off'}&ribbon=${overlayPinned ? 'pinned' : 'moments'}`}
+                  />
                 </div>
-                <div className="overlay-safe-label">48 PX SAFE MARGIN</div>
+                <div className="overlay-safe-label">32 PX SAFE MARGIN</div>
               </div>
             </div>
             <div className="info-callout">
@@ -3495,6 +3605,62 @@ function SettingsScreen({ ctx }: { ctx: Context }) {
                 revokes the previous one.
               </p>
             </div>
+            <div className="overlay-presentation">
+              <label>
+                Overlay corner
+                <select value={overlayAnchor} onChange={(e) => setOverlayAnchor(e.target.value)}>
+                  {['top-right', 'top-left', 'bottom-right', 'bottom-left'].map((a) => (
+                    <option key={a} value={a}>
+                      {a.replace('-', ' ')}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={overlayMotion}
+                  onChange={(e) => setOverlayMotion(e.target.checked)}
+                />{' '}
+                Enable event transitions
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={overlayPinned}
+                  onChange={(e) => setOverlayPinned(e.target.checked)}
+                />{' '}
+                Pin war ribbon during councils
+              </label>
+            </div>
+            <p className="muted">
+              This is the real overlay for {ctx.s.realm}. Moments mode shows a battle for 12
+              seconds, then clears the scene; pin the war ribbon to keep an active battle visible.
+              Results show three recorded exchanges and clear after 16 seconds. Quiet mode hides all
+              events.
+            </p>
+            {ctx.s.mode === 'simulation' && (
+              <div className="button-row">
+                <Button
+                  disabled={ctx.busy || ctx.s.settings.quiet}
+                  onClick={() =>
+                    ctx.run(
+                      () =>
+                        ctx.action('announcement', {
+                          text: 'Simulation overlay test — your realm is connected.',
+                        }),
+                      'Test event sent to this realm’s overlay for six seconds.',
+                    )
+                  }
+                >
+                  <Monitor size={14} />
+                  Send test overlay event
+                </Button>
+                {ctx.s.settings.quiet && (
+                  <span>Turn off Quiet mode in Stream room to see test events.</span>
+                )}
+              </div>
+            )}
             <Button
               variant="primary"
               onClick={() =>
@@ -3510,12 +3676,37 @@ function SettingsScreen({ ctx }: { ctx: Context }) {
             </Button>
             {overlayUrl && (
               <div className="overlay-url">
-                <input aria-label="OBS browser-source URL" readOnly value={overlayUrl} />
-                <Button onClick={() => copy(overlayUrl)}>
+                <input
+                  aria-label="OBS browser-source URL"
+                  readOnly
+                  value={overlayPresentation(
+                    overlayUrl,
+                    overlayAnchor,
+                    overlayMotion,
+                    overlayPinned,
+                  )}
+                />
+                <Button
+                  onClick={() =>
+                    copy(
+                      overlayPresentation(overlayUrl, overlayAnchor, overlayMotion, overlayPinned),
+                    )
+                  }
+                >
                   <Copy size={14} />
                   Copy
                 </Button>
-                <a href={overlayUrl} target="_blank" rel="noreferrer" className="button">
+                <a
+                  href={overlayPresentation(
+                    overlayUrl,
+                    overlayAnchor,
+                    overlayMotion,
+                    overlayPinned,
+                  )}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="button"
+                >
                   Preview
                   <ExternalLink size={14} />
                 </a>
@@ -3594,27 +3785,9 @@ function SettingsScreen({ ctx }: { ctx: Context }) {
                 <ArrowUpRight size={13} />
               </Button>
             </div>
-            <h3>Mark a moment from your actual game</h3>
-            <p className="muted">
-              These are explicitly streamer-confirmed story beats. They grant no combat bonuses and
-              imply no automatic game telemetry.
+            <p>
+              Confirm match victories, defeats, clutch plays and milestones from the Stream room.
             </p>
-            <div className="button-row wrap">
-              {['A hard-earned victory', 'A brave attempt', 'A new personal best'].map((m) => (
-                <Button
-                  key={m}
-                  onClick={() =>
-                    ctx.run(
-                      () => ctx.action('milestone', { milestone: m }),
-                      'A streamer-confirmed moment was added to the chronicle.',
-                    )
-                  }
-                >
-                  <Flag size={13} />
-                  {m}
-                </Button>
-              ))}
-            </div>
           </>
         )}
         {tab === 'data' && (
@@ -3816,10 +3989,7 @@ function Modal({
   const item = ctx.hero?.gear?.find((g) => g.id === modal.item),
     def = ITEMS.find((i) => i.id === modal.item);
   const titles: Record<NonNullable<ModalState>['kind'], [string, string]> = {
-    chapter: [
-      'A chapter worth gathering for.',
-      'Choose a border. Your citizens choose what happens next.',
-    ],
+    chapter: ['Plan a battle', 'Choose a border. Your citizens choose what happens next.'],
     announcement: ['A word to your people.', 'A public campaign announcement, written by you.'],
     join: [
       'Every story needs a first step.',
@@ -4205,7 +4375,7 @@ function Modal({
                   <Check size={15} />
                 )}{' '}
                 {modal.kind === 'chapter'
-                  ? 'Open the council'
+                  ? 'Start battle vote'
                   : modal.kind === 'scenario'
                     ? 'Reset Simulation'
                     : modal.kind === 'upgrade'

@@ -1,0 +1,167 @@
+.progression-entry small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 16px;
+  line-height: 1.5;
+}
+.progression-balances {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 20px 0;
+}
+.progression-balances > span {
+  display: grid;
+  gap: 8px;
+  padding: 14px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.progression-balances strong {
+  font-size: 23px;
+  color: var(--gold);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.armory-layout {
+  max-width: 850px;
+  width: 100%;
+  margin-inline: auto;
+}
+.armory-layout .companion-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px 18px;
+  align-items: center;
+}
+.armory-layout .companion-row > strong,
+.armory-layout .companion-row > p {
+  grid-column: 1;
+}
+.armory-layout .companion-row > .button {
+  grid-column: 2;
+}
+.armory-layout .companion-row > .upgrade-comparison {
+  grid-row: 3;
+  margin: 0;
+}
+.armory-layout .companion-row > .button:first-of-type {
+  grid-row: 3;
+  align-self: center;
+}
+.armory-layout .companion-row > .button:only-of-type {
+  grid-row: 3;
+}
+.kingdom-scoreboard > div {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.kingdom-scoreboard > div.your-kingdom {
+  background: #c5a36c0b;
+}
+.kingdom-scoreboard > div > span {
+  flex: 1;
+  display: grid;
+  gap: 8px;
+}
+.kingdom-scoreboard small {
+  font-size: 12px;
+  color: var(--muted);
+}
+.kingdom-scoreboard b {
+  font-size: 18px;
+  color: var(--gold);
+  font-weight: 500;
+}
+.app-shell .scenic-atlas > img,
+.companion-shell .scenic-atlas > img {
+  filter: brightness(0.88) saturate(0.95);
+}
+.kingdom-artwork,
+.kingdom-detail-banner:before {
+  background-image: var(--realm-map-image, url('/everfall-realms-v2.png'));
+}
+.atlas-page .realm-card-cover,
+.atlas-page .atlas-realm-art {
+  background-image:
+    linear-gradient(0deg, #111519e8, transparent 85%),
+    var(--realm-map-image, url('/everfall-realms-v2.png'));
+  background-size: cover;
+  background-position: center;
+  filter: none;
+}
+.companion-shell .scenic-atlas {
+  filter: none;
+}
+@media (max-width: 650px) {
+  .companion-shell .citizen-identity {
+    display: grid;
+    grid-template-columns: 56px minmax(0, 1fr);
+    gap: 14px;
+  }
+  .companion-shell .citizen-identity > .avatar {
+    width: 56px;
+    height: 62px;
+  }
+  .companion-shell .citizen-identity h1 {
+    font-size: 25px;
+    overflow-wrap: anywhere;
+    margin: 6px 0 10px;
+  }
+  .companion-shell .citizen-identity aside {
+    grid-column: 1/-1;
+    width: 100%;
+    min-width: 0;
+    margin-top: 0;
+  }
+  .progression-balances {
+    gap: 8px;
+  }
+  .progression-balances > span {
+    padding: 12px 8px;
+    font-size: 11px;
+  }
+  .progression-balances strong {
+    font-size: 19px;
+  }
+  .armory-layout .companion-row {
+    grid-template-columns: 1fr;
+  }
+  .armory-layout .companion-row > .button {
+    grid-column: 1 !important;
+    grid-row: auto !important;
+    justify-self: start;
+  }
+  .kingdom-scoreboard > div {
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .kingdom-scoreboard b {
+    font-size: 15px;
+  }
+  .kingdom-scoreboard > div > span {
+    min-width: 150px;
+  }
+}
+.scenic-atlas .settlement.other-kingdom {
+  opacity: 0.55;
+}
+.scenic-atlas .settlement.other-kingdom.selected,
+.scenic-atlas .settlement.other-kingdom:hover,
+.scenic-atlas .settlement.other-kingdom:focus-visible {
+  opacity: 1;
+}
+.companion-shell .scenic-atlas {
+  margin-top: 18px;
+}
+.companion-welcome:before {
+  background-image:
+    linear-gradient(90deg, #111519f5, #11151966),
+    var(--realm-map-image, url('/everfall-realms-v2.png'));
+}

@@ -155,7 +155,7 @@ test('v1 database migration preserves characters, conquered borders and rewards 
     w.run('UPDATE environment SET version=1');
     w.close();
     w = new World('simulation', path, clock);
-    assert.equal(w.get('SELECT version FROM environment')!.version, 3);
+    assert.equal(w.get('SELECT version FROM environment')!.version, 5);
     assert.equal(w.snapshot().citizens, count);
     assert.equal(w.character('sim-0001').supporter!.tier, 2);
     assert.equal(w.snapshot().territories.find((t) => t.id === 'glacier-watch')!.owner, 'west');

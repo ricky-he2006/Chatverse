@@ -1,5 +1,15 @@
 # Reproducible worlds and hackathon demo
 
+## Current presenter kit — October 30
+
+Use [the current live walkthrough](JUDGES_LIVE_DEMO.md) and [2:55 recording script](JUDGES_VIDEO_SCRIPT.md). Start a fresh isolated rehearsal with `./start-judge-demo.ps1`, then open `http://localhost:3001/judges-demo.html`. The prepared Frostpass battle is paused, so equipment and territory development can be demonstrated first. Current simulation completion is **Run full simulated battle**, not the older fixed 65-second advance described below. This kit supplies a recording plan and interactive presenter guide, not a rendered video.
+
+The older planning sections below include proposed scenarios and historical rule research. They are not a declaration that every proposed scenario, hosted feature or contest detail is currently implemented or newly reverified.
+
+## Experience walkthrough added October 27
+
+Use a dedicated Simulation demo database. Start in **Stream room** to show the streamer’s few immediate controls, then open **Citizen preview** for personal gear, challenges and sealed voting. Return to Stream room and open **Lord preview → Lord’s council**. Submit an eligible border proposal; return and accept it in the **Council inbox**. A normal council opens, which citizens can pledge to and vote in. Keep **Backstage** brief: it is setup and maintenance, not the centerpiece. Previews are explicitly fictional and do not prove real Twitch connectivity. Each Lord may propose once per UTC day, so use a fresh dedicated demo world for repeated recordings.
+
 Verified target: Codex × TwitchCon Hackathon 2026. Submission closes November 2, 2026 at 5:00 PM Eastern / 2:00 PM Pacific ([official schedule](https://twitchcon-codex.devpost.com/details/dates)). Finish the core recording by November 1 and aim to submit by noon Eastern November 2, preserving five hours of contingency.
 
 The [official rules](https://twitchcon-codex.devpost.com/rules) require newly created submission-period work, working Twitch functionality, accessible source/setup, a description of Codex use, and a Codex session ID. Video should be under three minutes, publicly visible on YouTube, and show both Twitch operation and how Codex built the project. Materials need English or translation and authorized assets. Owner must check personal/team eligibility. Keep the submitted artifact frozen after cutoff; maintain judging access. The rules and schedule disagree on judging dates: preserve access through November 15 rather than relying on the shorter schedule.

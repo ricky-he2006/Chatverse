@@ -1,5 +1,7 @@
 # Twitch and OBS integration plan
 
+**Implemented viewer sign-in, October 27:** `/auth/viewer/start` and `/auth/viewer/callback` form a separate identity-only authorization-code flow for the personal companion. Register the additional `TWITCH_VIEWER_REDIRECT_URI` in `.env.example` alongside the broadcaster redirect. It does not replace streamer OAuth or authorize chat/subscription access. See [setup, lifetimes and mock-versus-real verification](EXPERIENCE_PLAN.md#setup-and-verification). The companion remains localhost-only.
+
 Research reviewed October 26, 2026, using official Twitch and OBS documentation linked below. Requirements can change; M0/M1 must recheck actual app type, granted scopes and live payloads. This plan does not imply a registered app, verified bot, existing authorization or completed integration.
 
 ## Chosen topology

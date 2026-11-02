@@ -3,9 +3,9 @@ export const FACTIONS: Record<
   Faction,
   { name: string; subtitle: string; color: string; banner: string }
 > = {
-  north: { name: 'North Kingdom', subtitle: 'The Frostborn', color: '#7cbde8', banner: 'shield' },
-  east: { name: 'East Kingdom', subtitle: 'The Sunblades', color: '#e89b7f', banner: 'sun' },
-  west: { name: 'West Kingdom', subtitle: 'The Shadowfell', color: '#b29be4', banner: 'moon' },
+  north: { name: 'North Kingdom', subtitle: 'The Frostborn', color: '#78a6c6', banner: 'shield' },
+  east: { name: 'East Kingdom', subtitle: 'The Sunblades', color: '#d28d83', banner: 'sun' },
+  west: { name: 'West Kingdom', subtitle: 'The Shadowfell', color: '#9bb69c', banner: 'moon' },
 };
 export const CLASSES: Record<
   ClassName,
